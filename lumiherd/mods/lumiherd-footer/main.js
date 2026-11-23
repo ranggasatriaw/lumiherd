@@ -1,7 +1,11 @@
 import { View, div, image, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 // Lumiherd's clone of the shipped workspace-chrome: the footer also has Lumiherd help & options.
-import { theme, run, props, window, shared, setShared, updates, layout, openOverlay } from "herdr";
+import { theme, run, props, window, shared, setShared, updates, layout, openOverlay, exec, appHome } from "herdr";
+
+// A personal brand icon, kept out of this repo: brand/lumiherd.png in the Herdr home (a square PNG).
+// Without it the brand row shows Herdr's own logo.
+const BRAND = "brand/lumiherd.png";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -25,6 +29,11 @@ function toggleSidebar() {
 }
 
 export default class WorkspaceChrome extends View {
+  init(_props, cx) {
+    this.brand = null;
+    exec("test", ["-f", `${appHome()}/${BRAND}`]).then((r) => { this.brand = r?.code === 0 ? BRAND : null; cx.notify(); }).catch(() => {});
+  }
+
   button(id, label, action) {
     const t = theme();
     return div().id(id).size(26).flex_none().flex().items_center().justify_center().rounded(6).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
@@ -47,7 +56,7 @@ export default class WorkspaceChrome extends View {
     }
     return h_flex().size_full().bg(t.chrome).pl(collapsed ? 6 : 14).pr(10).gap(4).items_center().text_size(13.5)
       .when(window()?.platform === "macos" && !collapsed, el => el.pl(76))
-      .when(!collapsed, el => el.child(h_flex().flex_1().gap(8).items_center().child(image("frame/welcome/herdr.png").size(20).rounded(5)).child(div().font_semibold().text_color(t.foreground).child("Herdr"))))
+      .when(!collapsed, el => el.child(h_flex().flex_1().gap(8).items_center().child(image(this.brand ?? "frame/welcome/herdr.png").size(20).rounded(5)).child(div().font_semibold().text_color(t.foreground).child("Lumiherd"))))
       .when(!collapsed, el => el.child(this.button("search", svg("mods/lumiherd-footer/search.svg").size(15), () => run("mod.open", { name: "picker" }))))
       // On the macOS rail the traffic lights fill the row; the agents list's » unfolds it.
       .when(!(collapsed && window()?.platform === "macos"), el => el.child(this.button("sidebar-toggle", svg("mods/lumiherd-footer/sidebar.svg").size(15), toggleSidebar)));
