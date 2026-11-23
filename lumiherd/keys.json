@@ -1,0 +1,11 @@
+{
+  "global": {
+    "ctrl-tab": "lumiherd.switcher",
+    "ctrl-shift-w": "lumiherd.close-tab",
+    "ctrl-shift-x": "lumiherd.close-pane"
+  },
+  "mod:lumiherd-switcher": {
+    "ctrl-tab": "lumiherd-switcher.next",
+    "ctrl-shift-tab": "lumiherd-switcher.prev"
+  }
+}
