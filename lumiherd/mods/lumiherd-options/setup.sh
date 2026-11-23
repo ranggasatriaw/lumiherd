@@ -48,7 +48,10 @@ case "$cmd" in
       need_jq
       [ -s "$settings" ] && jq -e "(.statusLine.command // \"\") as \$c | (\$c | length) > 0 and (\$c | $ours | not)" "$settings" >/dev/null 2>&1 \
         && jq '.statusLine' "$settings" > "$was"
-      edit '.statusLine = {type: "command", command: $c, refreshInterval: 5}' --arg c "sh \"$script\""
+      # Guarded: if this mod folder is gone (removed or renamed), the status line
+      # falls back to the one kept aside instead of going blank.
+      edit '.statusLine = {type: "command", command: $c, refreshInterval: 5}' \
+        --arg c "f=\"$script\"; [ -f \"\$f\" ] && exec sh \"\$f\"; w=\"\$HOME/.claude/.lumiherd-statusline-was.json\"; [ -s \"\$w\" ] && exec sh -c \"\$(jq -r .command \"\$w\")\""
     elif [ -s "$was" ]; then
       edit '.statusLine = $w[0]' --slurpfile w "$was" && rm -f "$was"
     else
