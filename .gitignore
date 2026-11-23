@@ -6,5 +6,5 @@ jsconfig.json
 .DS_Store
 __pycache__/
 *.pyc
-*.before-over9k
+*.before-lumiherd
 *.before-update
