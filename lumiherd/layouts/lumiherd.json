@@ -141,6 +141,13 @@
                       }
                     },
                     {
+                      "id": "prs",
+                      "type": "block",
+                      "content": {
+                        "mod": "branch-pr"
+                      }
+                    },
+                    {
                       "id": "todos",
                       "type": "block",
                       "content": {

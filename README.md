@@ -23,5 +23,9 @@ The Files panel is [Herdr-Roundup](https://github.com/carstenlucke/herdr-roundup
 are not in this repo: copy them from Roundup's `mods/` into `~/.config/herdr-app/mods`.
 `pasang.sh` warns when they are missing.
 
+The PRs panel is [Branch PR](https://github.com/munza/herdr-mods/tree/main/branch-pr)
+(Apache-2.0): build and install it from its repo (`go -C branch-pr/helper run ./install`, needs Go
+and a signed-in `gh`). The PRs button shows only when `mods/branch-pr` is installed.
+
 Upstream changes: `git fetch upstream`, then cherry-pick what's wanted (paths
 differ: `over9k/` there is `lumiherd/` here).

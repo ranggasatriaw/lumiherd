@@ -2,7 +2,7 @@
 // lumiherd-close / lumiherd-menu (terminals and agents, not tabs).
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { spaces, panes, agents, run, openOverlay, theme, window, shared, layout, settings } from "herdr";
+import { spaces, panes, agents, run, openOverlay, theme, window, shared, layout, settings, readTextFile, appHome } from "herdr";
 import { plan } from "./close-plan.js";
 import { agentTask } from "./agent-name.js";
 
@@ -25,8 +25,11 @@ function find(node, id) {
 }
 
 export default class Tabs extends View {
-  init() {
+  init(_props, cx) {
     this.pressed = null;
+    // The PRs button shows only with Branch PR installed (its folder in the mods).
+    this.hasPrs = false;
+    readTextFile(`${appHome()}/mods/branch-pr/mod.json`).then((t) => { this.hasPrs = t != null; cx.notify(); }).catch(() => {});
     this.shown = undefined; // the panel last seen showing (its id, null when closed), set on first render
     this.timelineAt = 0; // when the Timeline button was last clicked to open it
   }
@@ -122,6 +125,8 @@ export default class Tabs extends View {
       .child(button("tab-new", "+", () => openOverlay({ mod: "new-menu", kind: "popup", width: 250, height: 512 })))
       .when(enabled.includes("files"), el => el.child(panelButton("files", "Files", "mods/files/file.svg")))
       .when(enabled.includes("changes"), el => el.child(panelButton("changes", "Changes", "mods/changes/changes.svg")))
+      // Pull requests: Branch PR (github.com/munza/herdr-mods), when it is installed.
+      .when(this.hasPrs, el => el.child(panelButton("prs", "PRs", "mods/branch-pr/icons/pull-request.svg")))
       // To-dos per project, shared with agents (lumiherd-todos).
       .when(todosOn, el => el.child(panelButton("todos", "To-do", "mods/workspace-chrome/circle-check.svg")))
       // Your prompts in the agent you're in, as a timeline (lumiherd-prompts).
