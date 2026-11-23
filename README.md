@@ -18,5 +18,10 @@ herdr-app do layout.switch '{"name":"lumiherd"}'
 and runs `herdr-app check` on each mod. Its keys (`lumiherd/keys.macos.json`) are
 not merged automatically.
 
+The Files panel is [Herdr-Roundup](https://github.com/carstenlucke/herdr-roundup)'s
+`roundup-files` (Apache-2.0), which opens files in its `roundup-preview`. Those two mods
+are not in this repo: copy them from Roundup's `mods/` into `~/.config/herdr-app/mods`.
+`pasang.sh` warns when they are missing.
+
 Upstream changes: `git fetch upstream`, then cherry-pick what's wanted (paths
 differ: `over9k/` there is `lumiherd/` here).
