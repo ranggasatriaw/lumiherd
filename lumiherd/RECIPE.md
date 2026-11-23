@@ -52,9 +52,7 @@ Left to right. All colours are theme names (`canvas`, `chrome`, `background`,
     background, `accent` text), the reset time in `dim`, the used percentage
     coloured green, yellow or red, and a chevron.
   - **Footer**, 97px (`lumiherd-footer`): Settings, Lumiherd help & options, and
-    Add machine, each 30px with a 14px icon. A newer Lumiherd adds an
-    "Update" badge like the usage plan's (10.5px `ansi1` on a faint `ansi1`), at the right end of
-    Lumiherd help & options; on the rail, a 6px `ansi1` dot.
+    Add machine, each 30px with a 14px icon.
 - **Work column**, filling the rest:
   - **Tabs**, 42px (`lumiherd-tabs`, a copy of Herdr's own tab bar): the space's
     tabs as pills, each with its program's icon, status and a close ×, then a +.
@@ -145,14 +143,6 @@ Left to right. All colours are theme names (`canvas`, `chrome`, `background`,
   instead: tabs for 30d, 2w, 1w, 1d (also the row's number) over bars by day, stacked by
   model, and each model's cost for the tab as the chart's key.
   The block resizes to fit.
-- **Updates:** the installer saves where it ran from in
-  `~/.local/share/lumiherd/source.json` (the folder, and its commit and branch if
-  it's a git clone). The footer fetches that branch on start and every 6 hours
-  (Options › Folders › Check for updates) and puts the new commits' subjects in
-  shared `lumiherd.update`. Help & options then shows "Update available · N
-  changes", the list, and Update: `git pull --ff-only`, then
-  `install.sh --yes --no-claude`. Herdr reloads the mods as they land, so no
-  restart. If the pull can't fast-forward (local changes), the card says why.
 
 ## Built from
 
