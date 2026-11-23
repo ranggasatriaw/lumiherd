@@ -27,5 +27,5 @@ The PRs panel is [Branch PR](https://github.com/munza/herdr-mods/tree/main/branc
 (Apache-2.0): build and install it from its repo (`go -C branch-pr/helper run ./install`, needs Go
 and a signed-in `gh`). The PRs button shows only when `mods/branch-pr` is installed.
 
-Upstream changes: `git fetch upstream`, then cherry-pick what's wanted (paths
+Over9k changes: `git fetch over9k` (the remote is named `over9k`, not `upstream`, so PR tools treat this repo as its own), then cherry-pick what's wanted (paths
 differ: `over9k/` there is `lumiherd/` here).
