@@ -775,6 +775,12 @@ export default class Spaces extends View {
           for (const k of Object.keys(this.lastWork)) if (!live.has(k)) delete this.lastWork[k];
           localStorage.setItem("agents.lastWork", JSON.stringify(this.lastWork));
         }
+        // plan-progress's tasks (a Claude Code plugin): its store, "plans:<session id>" -> bars.
+        let plans = {};
+        try {
+          const r = await exec("sh", ["-c", `cat "$HOME"/.claude/plugins/store/plan-progress_*.json 2>/dev/null | head -c 4000000`]);
+          for (const [k, v] of Object.entries(JSON.parse(r?.stdout || "{}"))) if (k.startsWith("plans:") && Array.isArray(v)) plans[k.slice(6)] = v;
+        } catch {}
         // Pi's model, thinking level and context: its footer, per terminal.
         const pi = {};
         for (const a of agents()) {
@@ -806,9 +812,9 @@ export default class Spaces extends View {
             if (e) effort[port] = e;
           }
         }
-        const next = JSON.stringify([info, pi, models, effort, up]);
-        if (next !== JSON.stringify([this.info, this.piInfo, this.models, this.serverEffort, this.serversUp])) {
-          this.info = info; this.piInfo = pi; this.models = models; this.serverEffort = effort; this.serversUp = up;
+        const next = JSON.stringify([info, pi, models, effort, up, plans]);
+        if (next !== JSON.stringify([this.info, this.piInfo, this.models, this.serverEffort, this.serversUp, this.plans])) {
+          this.info = info; this.piInfo = pi; this.models = models; this.serverEffort = effort; this.serversUp = up; this.plans = plans;
           cx.notify();
         } else if (ssh || subsChanged || Object.values(subs).some((l) => l.some((x) => Date.now() / 1000 - x.at < 70))) {
           cx.notify(); // a connection started, is still going, or ended
@@ -892,6 +898,41 @@ export default class Spaces extends View {
       .on_click((_e, cx) => { cx.stop_propagation(); cx.open_url(pr.url); })
       .child(svg("mods/lumiherd/pull-request.svg").size(10).flex_none())
       .child(`#${pr.number}${pr.draft ? " draft" : ""}`);
+  }
+
+  // An agent's task now, from plan-progress (this.plans by its session): the bar that
+  // needs you, else the one working, else one that failed (newest of each); its
+  // step in progress (else the next to do), and done/total. Null without one.
+  taskOf(a) {
+    const session = (this.info?.[a.address]?.transcript ?? "").split("/").pop().replace(/\.jsonl$/, "");
+    const list = (session && this.plans?.[session]) || [];
+    const rank = { needs_input: 0, running: 1, error: 2 };
+    const p = list.filter((x) => x.state in rank).sort((x, y) => rank[x.state] - rank[y.state] || (y.startedAt ?? 0) - (x.startedAt ?? 0))[0];
+    if (!p) return null;
+    const steps = (p.stages ?? []).flatMap((g) => g.steps ?? []);
+    const now = steps.find((x) => x.status === "active") ?? steps.find((x) => x.status === "error") ?? steps.find((x) => x.status === "pending");
+    const done = steps.filter((x) => x.status === "done" || x.status === "skipped").length;
+    return { state: p.state, title: p.title ?? p.id, step: now?.title ?? null, done, total: steps.length };
+  }
+
+  // The task line under an agent's details: a dot in its state's colour, the step
+  // (or the task's title), cut to fit, then a short bar and done/total that always
+  // show. A click opens the Tasks panel on that agent.
+  taskLine(task, p, t) {
+    const c = task.state === "needs_input" ? t.blocked : task.state === "error" ? t.ansi1 : t.working;
+    const pct = task.total ? Math.round((task.done * 100) / task.total) : 0;
+    return h_flex().id(`task-${p.pane}`).min_w(0).h(15).gap(6).items_center().text_size(11.5).line_height("15px").cursor_pointer()
+      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+      .on_click((_e, cx) => {
+        cx.stop_propagation();
+        run("pane.focus", { pane: p.pane });
+        run("layout.select", { stack: "panel-body", child: "tasks" });
+        run("layout.show", { id: "panel" });
+      })
+      .child(div().size(6).rounded(3).flex_none().bg(c))
+      .child(div().flex_1().min_w(0).truncate().text_color(t.muted).child(task.step ?? task.title))
+      .child(div().w(34).h(3).flex_none().rounded(2).bg(t.border).overflow_hidden().child(div().h_full().rounded(2).bg(c).w(`${pct}%`)))
+      .child(div().flex_none().text_size(10.5).text_color(t.dim).child(`${task.done}/${task.total}`));
   }
 
   subsShown(address) { return !this.subsClosed.has(address); }
@@ -1120,7 +1161,9 @@ export default class Spaces extends View {
       // Its two lines sit close (tight line heights), with room above and below.
       // SSH'd elsewhere: lit while its row there is hovered, and hovering it lights that one (sshRows).
       const sshed = this.sshedTo(p.terminal, "self");
-      const row = lit(h_flex().id(`term-${p.terminal}`), this.hoverLink?.source === p.terminal && this.hoverLink).h(two ? 46 : 26).flex_none().pl(4 + indent).pr(8).gap(two ? 10 : 8).items_center().rounded(two ? 8 : 7)
+      // Its plan-progress task now, on a third line (expanded rows only).
+      const task = a && two ? this.taskOf(a) : null;
+      const row = lit(h_flex().id(`term-${p.terminal}`), this.hoverLink?.source === p.terminal && this.hoverLink).h(two ? (task ? 64 : 46) : 26).flex_none().pl(4 + indent).pr(8).gap(two ? 10 : 8).items_center().rounded(two ? 8 : 7)
         .when(Boolean(two), (el) => el.my(2))
         .when(space.active && p.focused && !picked, (el) => el.bg(t.hover))
         .when(picked, (el) => el.bg(t.accent + "38"))
@@ -1168,7 +1211,8 @@ export default class Spaces extends View {
             .when(!info || two, (el) => el.when(Boolean(two), (x) => x.child(div().flex_1())).children([this.prChip(space, p, t), this.endChips(a, p, t)].filter(Boolean))))
           .when(Boolean(two), (el) => el.overflow_hidden().child(info ? this.agentDetails(info, t, a, p, opt, false).text_size(11.5).line_height("15px")
             : h_flex().min_w(0).items_center().text_size(11.5).line_height("15px").text_color(t.dim)
-              .children(dotted([div().text_color(this.tagWhere?.color ?? t.dim).child(this.tagWhere?.folder ?? ""), this.tagWhere?.machine && div().child(this.tagWhere.machine)].filter(Boolean))))))
+              .children(dotted([div().text_color(this.tagWhere?.color ?? t.dim).child(this.tagWhere?.folder ?? ""), this.tagWhere?.machine && div().child(this.tagWhere.machine)].filter(Boolean)))))
+          .when(Boolean(task), (el) => el.child(this.taskLine(task, p, t))))
         .when(Boolean(info) && !two, (el) => el.child(this.agentDetails(info, t, a, p, opt)));
       // Its sub-agents nested under it (subRows), unless folded.
       return [row, ...(a && this.subsShown(a.address) ? this.subRows(a, p, t, indent) : [])];
