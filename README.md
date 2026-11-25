@@ -23,6 +23,11 @@ the terminal named `lumi-shell`, which `pasang.sh` starts when it isn't running.
 `exit` gives a fresh shell. Herdr removes the block from the layout if that terminal
 is removed (`hc rm lumi-shell`); run `pasang.sh` again to bring both back.
 
+The Tasks panel lists the tasks of the agent you're in, as the Claude Code plugin
+[plan-progress](https://github.com/zycck/claude-mods) (MIT) keeps them: install it in
+Claude Code (`/plugin marketplace add zycck/claude-mods`, then
+`/plugin install plan-progress@zycck-mods`). Without it the panel says so.
+
 The Files panel is [Herdr-Roundup](https://github.com/carstenlucke/herdr-roundup)'s
 `roundup-files` (Apache-2.0), which opens files in its `roundup-preview`. Those two mods
 are not in this repo: copy them from Roundup's `mods/` into `~/.config/herdr-app/mods`.
