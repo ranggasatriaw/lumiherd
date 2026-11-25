@@ -18,8 +18,10 @@
 //                Antigravity's (lumiherd/antigravity/agy-statusline.sh, optional: README):
 //                gemini-* and 3p-* (Claude and GPT) buckets, and the plan.
 //   Codex        the last rate_limits in its newest session file.
-//   Z.ai         the GLM Coding Plan's 5-hour and weekly quotas as omp last saw them
-//                (~/.omp/agent/agent.db, usage_history, provider zai).
+//   Z.ai         the GLM Coding Plan's quotas, asked of z.ai every 5 minutes
+//                (api.z.ai/api/monitor/usage/quota/limit, as OpenUsage does) with the key
+//                in $ZAI_API_KEY or OpenUsage's ~/.config/openusage/zai.json; without a
+//                key or an answer, as omp last saw them (~/.omp/agent/agent.db).
 // Each is as fresh as that program's last run; a limit whose reset time has
 // passed shows 0%. Limits belong to the account, not the computer: Gemini's come
 // from whichever connected computer saved them last (REMOTE), when it's the same
@@ -42,6 +44,12 @@ const ROW = 28, LIMIT = 20, TABS = 26, GRAPH = 72;
 
 const CODEX = `f=$(ls -t "$HOME"/.codex/sessions/*/*/*/*.jsonl 2>/dev/null | head -n 1); [ -n "$f" ] || exit 0
 grep -o '"rate_limits":{.*' "$f" | tail -n 1 | sed 's/^"rate_limits"://' | jq -c '{plan: .plan_type, primary, secondary}' 2>/dev/null`;
+// z.ai's own answer about the plan's quotas (empty without a key). The key goes to curl
+// on stdin, so it never shows in a process list.
+const ZAI_LIVE = `k="\${ZAI_API_KEY:-}"; f="$HOME/.config/openusage/zai.json"
+[ -n "$k" ] || k=$(jq -r '.apiKey // empty' "$f" 2>/dev/null); [ -n "$k" ] || exit 0
+printf 'Authorization: Bearer %s\n' "$k" | curl -s -m 15 -H @- -H 'Accept: application/json' https://api.z.ai/api/monitor/usage/quota/limit`;
+const ZAI_EVERY = 300000;
 // The newest reading of each z.ai limit that omp saved, as JSON rows (empty without omp).
 const ZAI = `db="$HOME/.omp/agent/agent.db"; [ -f "$db" ] || exit 0
 sqlite3 -readonly -json "$db" "select limit_id, used_fraction, resets_at from usage_history where id in (select max(id) from usage_history where provider = 'zai' group by limit_id)" 2>/dev/null`;
@@ -132,8 +140,13 @@ export default class Usage extends View {
     const account = (await exec("sh", ["-c", ACCOUNT]).catch(() => null))?.stdout.trim() || null;
     const codex = await exec("sh", ["-c", CODEX]).then((r) => JSON.parse(r.stdout || "null")).catch(() => null);
     const agy = await readJson(`${dir}/antigravity.json`);
-    const zai = await exec("sh", ["-c", ZAI]).then((r) => JSON.parse(r.stdout.trim() || "[]")).catch(() => []);
-    this.mine = { claude, api, plan, account, codex, agy, zai };
+    if (!this.zaiAt || Date.now() - this.zaiAt >= ZAI_EVERY) {
+      this.zaiAt = Date.now();
+      const r = await exec("sh", ["-c", ZAI_LIVE]).catch(() => null);
+      try { const d = JSON.parse(r?.stdout || "null"); if (d?.success && Array.isArray(d.data?.limits)) this.zaiLive = d.data; } catch {}
+    }
+    const zai = this.zaiLive ? [] : await exec("sh", ["-c", ZAI]).then((r) => JSON.parse(r.stdout.trim() || "[]")).catch(() => []);
+    this.mine = { claude, api, plan, account, codex, agy, zai, zaiLive: this.zaiLive };
     this.build();
     this.loadMachines(cx);
   }
@@ -178,8 +191,15 @@ export default class Usage extends View {
         b("gemini-5h", "5h"), b("gemini-weekly", "7d"), b("3p-5h", "5h 3rd party"), b("3p-weekly", "7d 3rd party"),
       ].filter(Boolean) });
     }
+    const live = this.mine.zaiLive;
+    if (live) {
+      // unit 3: hours, 6: weeks (z.ai's own numbering), number: how many.
+      const label = (x) => (x.unit === 3 ? `${x.number}h` : x.unit === 6 ? `${x.number * 7}d` : `${x.number}`);
+      const limits = live.limits.map((x) => limit(label(x), x.percentage, x.nextResetTime ? x.nextResetTime / 1000 : null));
+      if (limits.length) out.push({ key: "zai", name: "Z.ai", plan: planName(live.level) ?? "GLM", limits });
+    }
     const zai = this.mine.zai ?? [];
-    if (zai.length) {
+    if (!live && zai.length) {
       const z = (end, label) => { const r = zai.find((x) => x.limit_id?.endsWith(end)); return r && limit(label, (r.used_fraction ?? 0) * 100, r.resets_at ? r.resets_at / 1000 : null); };
       const limits = [z(":5h", "5h"), z(":1w", "7d")].filter(Boolean);
       if (limits.length) out.push({ key: "zai", name: "Z.ai", plan: "GLM", limits });
