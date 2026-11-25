@@ -21,6 +21,9 @@ let PY = null;
 const python = (args) => (PY ??= exec("python3", ["-c", "1"]).then((r) => (r?.code === 0 ? "python3" : "python"), () => "python"))
   .then((p) => exec(p, args));
 
+// Cards drawn at once: a session with hundreds of prompts can't be drawn in one go
+// ("interrupted"); older ones come in with "Show older".
+const SHOWN = 100;
 const READER = () => `${appHome()}/mods/lumiherd-prompts/prompts.py`;
 const pad = (n) => String(n).padStart(2, "0");
 
@@ -35,8 +38,21 @@ function when(iso) {
   if (diff < 7) return `${["sun", "mon", "tue", "wed", "thu", "fri", "sat"][d.getDay()]} ${hm}`;
   return d.toLocaleDateString();
 }
-// Plain text from Markdown, on one line.
-const plain = (s) => (s ?? "").replace(/```[\s\S]*?```/g, " ").replace(/\*\*|__|`|^#+\s*|^>\s*/gm, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/\s+/g, " ").trim();
+// Plain text from Markdown, on one line. Only its start is ever shown, and a long
+// session redraws often: work on the first few thousand characters, remembered,
+// or the render runs out of time ("interrupted").
+const plainSeen = new Map();
+const plain = (s) => {
+  const key = (s ?? "").slice(0, 4000);
+  let out = plainSeen.get(key);
+  if (out === undefined) {
+    out = toPlain(key);
+    if (plainSeen.size > 500) plainSeen.clear();
+    plainSeen.set(key, out);
+  }
+  return out;
+};
+const toPlain = (s) => s.replace(/```[\s\S]*?```/g, " ").replace(/\*\*|__|`|^#+\s*|^>\s*/gm, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/\s+/g, " ").trim();
 // "45s", "5m 12s", "1h 3m".
 function took(a, b) {
   const s = Math.max(0, Math.round((new Date(b) - new Date(a)) / 1000));
@@ -74,7 +90,7 @@ export default class Prompts extends View {
   follow(cx) {
     const f = focused();
     const here = f?.agent ?? (f?.terminal && agents().some((a) => a.address === f.terminal) ? f.terminal : null);
-    if (here && here !== this.agent) { this.agent = here; this.transcript = null; this.size = null; this.open = null; this.at = 0; this.prompts = []; cx.notify(); }
+    if (here && here !== this.agent) { this.agent = here; this.transcript = null; this.size = null; this.open = null; this.at = 0; this.shown = SHOWN; this.prompts = []; cx.notify(); }
     if (!this.agent || this.busy) return;
     this.busy = true;
     cx.spawn(async (cx) => {
@@ -134,7 +150,7 @@ export default class Prompts extends View {
 
   render(cx) {
     const t = theme();
-    const list = this.prompts;
+    const all = this.prompts, list = all.slice(0, this.shown ?? SHOWN);
     const working = agents().find((x) => x.address === this.agent)?.status === "working";
     const item = (p, i) => {
       const on = this.open === i, picked = this.at === i, live = i === 0 && working;
@@ -157,7 +173,7 @@ export default class Prompts extends View {
         .child(v_flex().flex_1().min_w(0).my(4).px(10).py(7).gap(4).rounded(8)
           .bg(on || picked ? t.raised : t.background).border_1().border_color(on ? t.accent : picked ? t.border : t.background).hover((x) => x.bg(t.hover))
           .child(h_flex().gap(6).text_size(10.5).text_color(t.dim)
-            .child(div().child(`#${list.length - i}`)).child(div().child(when(p.at))).child(div().flex_1()))
+            .child(div().child(`#${all.length - i}`)).child(div().child(when(p.at))).child(div().flex_1()))
           .child(div().text_size(12.5).line_height("17px").text_color(t.foreground)
             .when(!on, (el) => el.truncate().child(plain(p.text))).when(on, (el) => el.whitespace_normal().child(p.text)))
           // Messages you sent while it worked on this one.
@@ -173,7 +189,7 @@ export default class Prompts extends View {
           .when(!on && Boolean(p.reply), (el) => el.child(div().text_size(11.5).line_height("16px").text_color(t.muted).truncate().child(summary(p))))
           // Read in full: the reply as Markdown, then what it changed.
           .when(on, (el) => el.child(v_flex().mt(4).pt(6).gap(6).border_t_1().border_color(t.border)
-            .child(p.reply ? TextView.markdown(`reply-${list.length - i}`, p.reply).selectable(true).text_size(12.5) : div().text_size(12).text_color(t.dim).child(live ? "Working…" : "(no reply text)"))
+            .child(p.reply ? TextView.markdown(`reply-${all.length - i}`, p.reply).selectable(true).text_size(12.5) : div().text_size(12).text_color(t.dim).child(live ? "Working…" : "(no reply text)"))
             .when(p.edits.length > 0, (el) => el.child(v_flex().gap(1).text_size(11).text_color(t.dim)
               .child(div().child("Changed"))
               .children(p.edits.map((x) => div().truncate().text_color(t.muted).child(x.replace(home(), "~")))))))));
@@ -192,15 +208,19 @@ export default class Prompts extends View {
       })
       .child(h_flex().h(42).flex_none().px(14).gap(8).items_center().border_b(1).border_color(t.border)
         .child(div().flex_none().font_semibold().child("Timeline"))
-        .when(list.length > 0, (el) => el.child(div().flex_none().px(5).py(1).rounded(4).border_1().border_color(t.border).text_size(10).text_color(t.muted)
-          .child(`${list.length} prompt${list.length > 1 ? "s" : ""}`)))
+        .when(all.length > 0, (el) => el.child(div().flex_none().px(5).py(1).rounded(4).border_1().border_color(t.border).text_size(10).text_color(t.muted)
+          .child(`${all.length} prompt${all.length > 1 ? "s" : ""}`)))
         .child(div().flex_1().min_w(0).truncate().text_right().text_size(12).text_color(t.dim).child(this.name()))
         // As the CLI words them: ↓ what it wrote this session, and the context it holds now.
         .when(list.length > 0, (el) => el.child(div().flex_none().text_size(12).text_color(t.dim)
-          .child([`↓ ${count(list.reduce((n, p, i) => n + (i === 0 && working && this.live ? this.live.tokens : p.tokens || 0), 0))}`,
+          .child([`↓ ${count(all.reduce((n, p, i) => n + (i === 0 && working && this.live ? this.live.tokens : p.tokens || 0), 0))}`,
             this.context ? `context ${count(this.context)}` : ""].filter(Boolean).join(" · ")))))
       .when(Boolean(this.note), (el) => el.child(div().px(14).py(10).text_size(12).text_color(t.dim).child(this.note)))
       .child(v_flex().id("prompts-scroll").flex_1().min_h(0).overflow_y_scrollbar().pl(8).pr(8).pt(6).pb(8)
-        .children(list.map(item)));
+        .children(list.map(item))
+        .when(all.length > list.length, (el) => el.child(div().id("prompts-older").mx(22).my(6).px(10).py(6).rounded(6).cursor_pointer()
+          .border_1().border_color(t.border).text_size(12).text_color(t.muted).hover((x) => x.bg(t.hover))
+          .on_click((_e, cx) => { this.shown = list.length + SHOWN; cx.notify(); })
+          .child(`Show older (${all.length - list.length} more)`))));
   }
 }
