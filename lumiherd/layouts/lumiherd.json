@@ -34,7 +34,17 @@
               "size": {
                 "weight": 1
               },
-              "min": 90
+              "min": 90,
+              "floating": [
+                {
+                  "id": "lumi-pet",
+                  "content": {
+                    "mod": "lumi-pet"
+                  },
+                  "edge": "bottom",
+                  "align": "end"
+                }
+              ]
             }
           ]
         },
