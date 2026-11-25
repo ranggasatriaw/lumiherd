@@ -4,9 +4,10 @@
 //   one finished unseen  cheering
 //   one is working       typing on a laptop
 //   all idle             asleep
-// Beside her, a word on it ("2 kerja"). A click goes to that agent. Pictures:
-// <pose>.webp next to this file when there is one (a looping animation), else
-// <pose>.png (Lumiherd's icon character, drawn chibi).
+// Beside her, a speech bubble says it casually, naming the agent's space ("Psst,
+// fastr_nata nungguin jawabanmu!"); its line changes with the state and every
+// couple of minutes. A click goes to that agent. Pictures: <pose>.webp next to
+// this file when there is one (a looping animation), else <pose>.png.
 
 import { View, div, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
@@ -14,7 +15,23 @@ import { theme, agents, run, exec, appHome } from "herdr";
 
 const SIZE = 96;
 const POSES = ["blocked", "working", "done", "idle"];
-const WORDS = { blocked: "nungguin kamu", working: "kerja", done: "selesai", idle: "tidur" };
+// {s}: the agent's space; {n}: how many. "one" lines for a single agent, "many" for more.
+const LINES = {
+  blocked: {
+    one: ["Psst, {s} nungguin jawabanmu!", "Hei~ {s} butuh kamu sebentar", "{s} lagi nanya tuh, cek yuk!"],
+    many: ["{n} agen nungguin kamu nih!", "Ada {n} yang nanya, yuk dicek~"],
+  },
+  done: {
+    one: ["Yeay, {s} udah beres!", "{s} selesai~ cek hasilnya yuk", "Beres! {s} siap kamu lihat"],
+    many: ["{n} agen udah beres, mantap!", "Yeay, {n} kerjaan selesai~"],
+  },
+  working: {
+    one: ["{s} lagi ngerjain, aku temenin ya", "Sstt… {s} lagi fokus", "Semangat, {s}!"],
+    many: ["{n} agen lagi sibuk~", "Rame nih, {n} agen kerja bareng", "Aku pantau {n} agen ya"],
+  },
+  idle: { one: ["Sepi… aku bobo dulu ya", "Zzz… bangunin kalau butuh", "Lagi santai, belum ada kerjaan"] },
+};
+const EVERY = 120000; // a new line this often while the state stays
 
 export default class LumiPet extends View {
   init(_props, cx) {
@@ -27,9 +44,10 @@ export default class LumiPet extends View {
       }
       cx.notify();
     });
-    // agents() changes on its own; this only notices when the pose or count does.
+    // agents() changes on its own; this only redraws when what she shows or says does.
     cx.timer.every(1500, (cx) => {
-      const key = JSON.stringify(this.state());
+      const s = this.state();
+      const key = JSON.stringify([s.pose, s.count, s.space, Math.floor(Date.now() / EVERY)]);
       if (key !== this.last) { this.last = key; cx.notify(); }
     });
   }
@@ -38,22 +56,32 @@ export default class LumiPet extends View {
   state() {
     const list = agents() ?? [];
     for (const s of ["blocked", "done", "working"]) {
-      const these = list.filter((a) => a.status === s);
-      if (these.length) return { pose: s, count: these.length, to: these[0].address };
+      const these = list.filter((a) => a.status === s).sort((x, y) => (y.seq ?? 0) - (x.seq ?? 0));
+      if (these.length) return { pose: s, count: these.length, to: these[0].address, space: these[0].space_name || "agen" };
     }
-    return { pose: "idle", count: 0, to: null };
+    return { pose: "idle", count: 0, to: null, space: null };
+  }
+
+  line({ pose, count, space }) {
+    const set = LINES[pose];
+    const list = count > 1 && set.many ? set.many : set.one;
+    const pick = list[(Math.floor(Date.now() / EVERY) + count) % list.length];
+    return pick.replace("{s}", space ?? "").replace("{n}", String(count));
   }
 
   render(cx) {
     const t = theme();
-    const { pose, count, to } = this.state();
-    const color = pose === "blocked" ? t.blocked : pose === "working" ? t.working : pose === "done" ? t.done ?? t.ansi2 : t.dim;
-    const word = pose === "idle" ? WORDS.idle : `${count > 1 ? `${count} ` : ""}${WORDS[pose]}`;
-    const file = `mods/lumi-pet/${pose}.${this.animated?.has(pose) ? "webp" : "png"}`;
-    return h_flex().id("lumi-pet").size_full().px(10).gap(6).items_end().justify_end()
-      .when(Boolean(to), (el) => el.cursor_pointer().on_click(() => run("agent.focus", { terminal: to })))
-      .child(v_flex().flex_1().min_w(0).pb(10).items_end()
-        .child(div().text_size(11).font_semibold().text_color(color).child(word)))
+    const s = this.state();
+    const color = s.pose === "blocked" ? t.blocked : s.pose === "working" ? t.working : s.pose === "done" ? t.done ?? t.ansi2 : t.dim;
+    const file = `mods/lumi-pet/${s.pose}.${this.animated?.has(s.pose) ? "webp" : "png"}`;
+    // The bubble: rounded, its corner toward Lumi kept small, with a dot trailing to her.
+    const bubble = h_flex().items_end().gap(3)
+      .child(div().max_w(170).px(10).py(7).rounded(12).rounded_br(3).bg(t.background).border_1().border_color(s.pose === "blocked" ? color : t.border)
+        .text_size(11.5).line_height("15px").text_color(t.foreground).whitespace_normal().child(this.line(s)))
+      .child(div().size(5).mb(2).rounded(3).bg(t.background).border_1().border_color(t.border));
+    return h_flex().id("lumi-pet").size_full().pl(10).pr(6).gap(2).items_end().justify_end()
+      .when(Boolean(s.to), (el) => el.cursor_pointer().on_click(() => run("agent.focus", { terminal: s.to })))
+      .child(v_flex().flex_1().min_w(0).pb(SIZE / 2 - 4).items_end().child(bubble))
       .child(image(file).w(SIZE).h(SIZE).flex_none());
   }
 }
