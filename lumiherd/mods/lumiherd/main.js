@@ -337,6 +337,8 @@ export default class Spaces extends View {
     // (Pi's model list: name and server), and the effort each local server runs at.
     this.piInfo = {};
     this.models = {};
+    // Branch PR's panel (the layout's "prs"), where a PR chip leads when it is installed.
+    readTextFile(`${appHome()}/mods/branch-pr/mod.json`).then((t) => { this.hasPrPanel = t != null; }).catch(() => {});
     this.serverEffort = {};
     this.serversUp = {}; // port -> pid of a local model server running
     this.hoverServer = null; // the server chip under the pointer: it reads "Stop …"
@@ -885,7 +887,7 @@ export default class Spaces extends View {
   // How many agents, subagents and processes an agent has started (BOT / SUB / CPU), a
   // click shows or hides them (subRows); hovered, in words.
   // The open pull request of the branch this terminal's folder is on (its space's when
-  // the folder isn't listed): "#12" with the PR icon, a click opens it. Null without one.
+  // the folder isn't listed): "#12" with the PR icon, a click shows it in the PRs panel. Null without one.
   prChip(space, p, t) {
     if (!this.frame.options.prs) return null;
     const g = (p.cwd && this.git[JSON.stringify([space.machine ?? null, p.cwd])]) || (!space.machine && space.folder ? this.git[where(space)] : null);
@@ -895,7 +897,14 @@ export default class Spaces extends View {
       .text_size(10.5).text_color(pr.draft ? t.dim : t.accent).bg((pr.draft ? t.dim : t.accent) + "1f")
       .hover((x) => x.bg((pr.draft ? t.dim : t.accent) + "38"))
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
-      .on_click((_e, cx) => { cx.stop_propagation(); cx.open_url(pr.url); })
+      // To Herdr's PRs panel (Branch PR) on that agent; without it, the PR in the browser.
+      .on_click((_e, cx) => {
+        cx.stop_propagation();
+        if (!this.hasPrPanel) return cx.open_url(pr.url);
+        run("pane.focus", { pane: p.pane });
+        run("layout.select", { stack: "panel-body", child: "prs" });
+        run("layout.show", { id: "panel" });
+      })
       .child(svg("mods/lumiherd/pull-request.svg").size(10).flex_none())
       .child(`#${pr.number}${pr.draft ? " draft" : ""}`);
   }
