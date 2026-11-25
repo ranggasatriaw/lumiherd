@@ -1,0 +1,7 @@
+{
+  "programs": {
+    "claude": { "icon": "imul/claude.png", "tint": false },
+    "codex": { "icon": "imul/codex.png", "tint": false },
+    "omp": { "name": "omp", "icon": "imul/omp.png", "tint": false, "match": ["omp"] }
+  }
+}
