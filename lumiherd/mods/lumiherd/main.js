@@ -1096,7 +1096,8 @@ export default class Spaces extends View {
       // Its two lines sit close (tight line heights), with room above and below.
       // SSH'd elsewhere: lit while its row there is hovered, and hovering it lights that one (sshRows).
       const sshed = this.sshedTo(p.terminal, "self");
-      const row = lit(h_flex().id(`term-${p.terminal}`), this.hoverLink?.source === p.terminal && this.hoverLink).h(two ? 36 : 26).flex_none().pl(4 + indent).pr(8).gap(8).items_center().rounded(7)
+      const row = lit(h_flex().id(`term-${p.terminal}`), this.hoverLink?.source === p.terminal && this.hoverLink).h(two ? 46 : 26).flex_none().pl(4 + indent).pr(8).gap(two ? 10 : 8).items_center().rounded(two ? 8 : 7)
+        .when(Boolean(two), (el) => el.my(2))
         .when(space.active && p.focused && !picked, (el) => el.bg(t.hover))
         .when(picked, (el) => el.bg(t.accent + "38"))
         .hover((s) => s.bg(t.hover))
@@ -1130,25 +1131,25 @@ export default class Spaces extends View {
         // on hover an x there closes the terminal. An agent's own icon; a plain
         // terminal's is always the terminal's (not whatever it runs now, like sleep's).
         .child(h_flex().flex_none().gap(4).items_center()
-          .child(h_flex().w(16).flex_none().justify_center()
+          .child(h_flex().w(two ? 18 : 16).flex_none().justify_center()
             .when(this.hoverTerm === p.pane, (el) => el.child(this.closeButton(`close-${p.terminal}`, t, () => closeAsk({ panes: [p.pane] }))))
-            .when(this.hoverTerm !== p.pane && Boolean(a), (el) => el.child(this.mark(a, t))))
-          .when(!a, (el) => el.child(svg("icons/shell.svg").size(14).flex_none().text_color(t.foreground)))
+            .when(this.hoverTerm !== p.pane && Boolean(a), (el) => el.child(this.mark(a, t, two ? 14 : 12))))
+          .when(!a, (el) => el.child(svg("icons/shell.svg").size(two ? 18 : 14).flex_none().text_color(t.foreground)))
           // On a model with a logo of its own (Qwen): that logo as a badge on its corner.
           .when(Boolean(a && prog?.icon), (el) => el.child(badge(prog.tint
-            ? svg(prog.icon).size(14).flex_none().text_color(t.foreground)
-            : image(prog.icon).w(14).h(14).flex_none(), info?.family, t.chrome))))
-        .child(v_flex().flex_1().min_w(0)
+            ? svg(prog.icon).size(two ? 18 : 14).flex_none().text_color(t.foreground)
+            : image(prog.icon).w(two ? 18 : 14).h(two ? 18 : 14).flex_none(), info?.family, t.chrome))))
+        .child(v_flex().flex_1().min_w(0).when(Boolean(two), (el) => el.gap(2))
           .child(h_flex().min_w(0).gap(6).items_center()
-            .child(div().min_w(0).truncate().text_size(12.5).text_color(idle ? t.muted : t.foreground)
-              .when(Boolean(two), (el) => el.line_height("15px"))
+            .child(div().min_w(0).truncate().text_size(two ? 13.5 : 12.5).text_color(idle ? t.muted : t.foreground)
+              .when(Boolean(two), (el) => el.line_height("17px"))
               .child(a ? agentName(a, tab, p.cwd) : this.termName(p, tab, key)))
             // Its link and count chips: after its details (infoLine) on one line; on
             // two (expanded) or with no details, here on the name's line, at its end,
             // so the line under has the whole width.
             .when(!info || two, (el) => el.when(Boolean(two), (x) => x.child(div().flex_1())).children([this.endChips(a, p, t)].filter(Boolean))))
-          .when(Boolean(two), (el) => el.overflow_hidden().child(info ? this.agentDetails(info, t, a, p, opt, false).line_height("13px")
-            : h_flex().min_w(0).items_center().text_size(11).line_height("13px").text_color(t.dim)
+          .when(Boolean(two), (el) => el.overflow_hidden().child(info ? this.agentDetails(info, t, a, p, opt, false).text_size(11.5).line_height("15px")
+            : h_flex().min_w(0).items_center().text_size(11.5).line_height("15px").text_color(t.dim)
               .children(dotted([div().text_color(this.tagWhere?.color ?? t.dim).child(this.tagWhere?.folder ?? ""), this.tagWhere?.machine && div().child(this.tagWhere.machine)].filter(Boolean))))))
         .when(Boolean(info) && !two, (el) => el.child(this.agentDetails(info, t, a, p, opt)));
       // Its sub-agents nested under it (subRows), unless folded.
