@@ -1,4 +1,5 @@
-// Lumiherd's clone of the shipped confirm: asks before closing spaces, tabs and terminals,
+// Lumiherd's clone of the shipped confirm: asks before closing spaces, and tabs or panes
+// with an agent in them (working or not; plain terminals close at once),
 // and says what ends ("2 terminals, 1 agent"), not how many tabs. Opened as a
 // dialog with props { spaces?, tabs?, panes? } (ids); close-plan.js works out
 // the commands. Enter confirms, Esc cancels.
@@ -27,7 +28,9 @@ export default class CloseConfirm extends View {
     const and = (list) => list.length < 2 ? list.join("") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
     const ends = and([p.terminals && plural(p.terminals, "terminal"), p.agents && plural(p.agents, "agent")].filter(Boolean));
     const names = p.spaceNames.length > 3 ? [...p.spaceNames.slice(0, 3), `${p.spaceNames.length - 3} more`] : p.spaceNames;
-    const still = !p.working ? "" : p.working === p.agents ? (p.agents === 1 ? "It's still working." : "They're still working.") : `${p.working} of them still working.`;
+    // Every agent asks now, working or not: an idle one's conversation isn't lost.
+    const still = !p.agents ? "" : !p.working ? "Its conversation can be picked up again from + › Resume."
+      : p.working === p.agents ? (p.agents === 1 ? "It's still working." : "They're still working.") : `${p.working} of them still working.`;
     const detail = [ends ? `Ends ${ends}.` : "Nothing running ends.", still, names.length ? `Closes ${and(names)}.` : ""].filter(Boolean).join(" ");
     const button = (id, label, bg, fg, onClick) =>
       h_flex().id(id).h(32).px(14).items_center().rounded(8).border_1().border_color(id === "no" ? t.input : bg).bg(bg).text_color(fg).cursor_pointer().hover((s) => s.opacity(0.88)).on_click(onClick).child(label);

@@ -219,7 +219,7 @@ function listChange(command, folder, machine = null) {
 // when a whole space would go, else at once, as Herdr does.
 export function closeAsk(picked) {
   const p = plan(picked);
-  if (!p.spaces && !p.working) for (const c of p.commands) run(c.name, c.args);
+  if (!p.spaces && !p.agents) for (const c of p.commands) run(c.name, c.args);
   else openOverlay({ mod: "lumiherd-close", kind: "dialog", width: 380, height: 150, props: picked });
 }
 
