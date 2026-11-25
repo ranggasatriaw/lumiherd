@@ -4,9 +4,6 @@
 #   setup.sh status on|off <mods>     Lumiherd's optional Claude Code status line (yours kept aside)
 #   setup.sh agy on|off <mods>        Antigravity's status line and title, the same way
 #   setup.sh cleanup                  takes out what earlier versions of Lumiherd added
-#   setup.sh todo on|off <mods>       the to-do rule (CLAUDE.md, AGENTS.md), the `todo`
-#                                     command (~/.local/bin) and its hook (UserPromptSubmit)
-#   setup.sh default log|sync on|off  Log / Sync for projects that haven't set their own
 #   setup.sh check                    what's missing: one line each (none: nothing printed)
 # <mods>: Herdr's mods folder (forward slashes on Windows). Claude Code's settings
 # are ~/.claude/settings.json; Lumiherd's own entries are found by a marker in
@@ -80,42 +77,25 @@ case "$cmd" in
     fi
     exit 0 ;;
   cleanup)
-    # Removed features: next-prompt suggestions' Stop hook, and a status line an
-    # earlier Lumiherd always put in (statusline.sh; yours comes back). The optional
-    # one (claude-statusline.sh) is left as it is.
+    # Removed features: next-prompt suggestions' Stop hook, the To-do panel's
+    # `todo` command and hook, and a status line an earlier Lumiherd always put in
+    # (statusline.sh; yours comes back). The optional one (claude-statusline.sh) is
+    # left as it is.
+    w="$HOME/.local/bin/todo"
+    grep -q 'lumiherd todo wrapper' "$w" 2>/dev/null && rm -f "$w"
     [ -s "$settings" ] && command -v jq >/dev/null 2>&1 || exit 0
     hook off Stop lumiherd-prompts/next.py ""
+    hook off UserPromptSubmit lumiherd-todos/todo-hook.sh ""
     was="$HOME/.claude/.lumiherd-statusline-was.json"
     if jq -e '(.statusLine.command // "") | test("lumiherd[^/\"]*/statusline\\.sh")' "$settings" >/dev/null 2>&1; then
       if [ -s "$was" ]; then edit '.statusLine = $w[0]' --slurpfile w "$was"; else edit 'del(.statusLine)'; fi
       rm -f "$was"
     fi
     exit 0 ;;
-  todo)
-    t="$mods/lumiherd-todos/todo.sh"
-    [ -f "$t" ] || { echo "No $t" >&2; exit 2; }
-    sh "$t" --rule "$on"
-    # The `todo` command agents run: a small wrapper (only Lumiherd's own is ever
-    # replaced or removed).
-    w="$HOME/.local/bin/todo"
-    ours() { grep -q 'lumiherd todo wrapper' "$w" 2>/dev/null || { [ -L "$w" ] && readlink "$w" | grep -q lumiherd; }; }
-    if [ "$on" = on ]; then
-      if [ ! -e "$w" ] || ours; then
-        mkdir -p "$HOME/.local/bin" && rm -f "$w" \
-          && printf '#!/bin/sh\n# lumiherd todo wrapper (Options > To-do)\nexec sh "%s" "$@"\n' "$t" > "$w" && chmod +x "$w"
-      fi
-    elif ours; then rm -f "$w"; fi
-    command -v jq >/dev/null 2>&1 && hook "$on" UserPromptSubmit lumiherd-todos/todo-hook.sh "sh \"$mods/lumiherd-todos/todo-hook.sh\""
-    exit 0 ;;
-  default)
-    k=$on v=${3:-}
-    case "$k:$v" in log:on|log:off|sync:on|sync:off) ;; *) echo "usage: setup.sh default log|sync on|off" >&2; exit 2 ;; esac
-    d="${XDG_DATA_HOME:-$HOME/.local/share}/lumiherd"; mkdir -p "$d"
-    { grep -v "^$k " "$d/todo-defaults" 2>/dev/null; echo "$k $v"; } > "$d/todo-defaults.tmp" && mv "$d/todo-defaults.tmp" "$d/todo-defaults" ;;
   check)
     command -v git >/dev/null 2>&1 || echo "git: the sidebar's branch, changes and push/pull"
-    command -v jq >/dev/null 2>&1 || echo "jq: subagents, background tasks, resume, hand-off, the to-do hook"
-    { command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; } || echo "python 3: the Timeline, TODO.md sync"
+    command -v jq >/dev/null 2>&1 || echo "jq: subagents, background tasks, resume, hand-off"
+    { command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; } || echo "python 3: the Timeline, agent details"
     exit 0 ;;
   *) sed -n '2,12s/^# \{0,1\}//p' "$0"; exit 2 ;;
 esac

@@ -90,9 +90,9 @@ export default class Tabs extends View {
       : 10;
     const panel = find(root, "panel"), body = find(root, "panel-body");
     const enabled = shared("workspace.panels") ?? ["files", "changes"];
-    // Options › To-do off: no button, and the panel closes if it's showing the list.
-    const todosOn = (shared("sidebar.options") ?? {}).todos !== false;
-    if (!todosOn && panel && !panel.hidden && body?.active === "todos") run("layout.hide", { id: "panel" });
+    // Options › Panels & Lumi: Tasks off hides its button, and the panel if it shows it.
+    const tasksOn = (shared("sidebar.options") ?? {}).tasks !== false;
+    if (!tasksOn && panel && !panel.hidden && body?.active === "tasks") run("layout.hide", { id: "panel" });
     const timelineOn = (shared("sidebar.options") ?? {}).timeline !== false;
     if (!timelineOn && panel && !panel.hidden && body?.active === "prompts") run("layout.hide", { id: "panel" });
     // The Timeline opens only from its button: anything else that turns the panel
@@ -103,7 +103,7 @@ export default class Tabs extends View {
       if (this.shown) run("layout.select", { stack: "panel-body", child: this.shown });
       else run("layout.hide", { id: "panel" });
     } else this.shown = showing;
-    // One side panel for the window: Files, Changes or To-do stays as you left it
+    // One side panel for the window: Files, Changes, PRs, Timeline or Tasks stays as you left it
     // when you switch space, tab or pane (Herdr's tabs remember it per space).
     const panelButton = (id, label, icon) => {
       const on = panel && !panel.hidden && body?.active === id;
@@ -127,12 +127,10 @@ export default class Tabs extends View {
       .when(enabled.includes("changes"), el => el.child(panelButton("changes", "Changes", "mods/changes/changes.svg")))
       // Pull requests: Branch PR (github.com/munza/herdr-mods), when it is installed.
       .when(this.hasPrs, el => el.child(panelButton("prs", "PRs", "mods/branch-pr/icons/pull-request.svg")))
-      // To-dos per project, shared with agents (lumiherd-todos).
-      .when(todosOn, el => el.child(panelButton("todos", "To-do", "mods/workspace-chrome/circle-check.svg")))
       // Your prompts in the agent you're in, as a timeline (lumiherd-prompts).
       .when(timelineOn, el => el.child(panelButton("prompts", "Timeline", "mods/lumiherd-prompts/timeline.svg")))
       // The agent's plan-progress tasks as a list (lumiherd-tasks).
-      .child(panelButton("tasks", "Tasks", "mods/workspace-chrome/circle-check.svg"))
+      .when(tasksOn, el => el.child(panelButton("tasks", "Tasks", "mods/workspace-chrome/circle-check.svg")))
       .when(w?.buttons, el => el.child(button("minimize", w.platform === "windows" ? svg("mods/lumiherd-tabs/win-min.svg").size(16) : "−", () => run("window.minimize")))
         .child(button("maximize", w.platform === "windows" ? svg(`mods/lumiherd-tabs/${w.maximized ? "win-restore" : "win-max"}.svg`).size(16) : "□", () => run("window.maximize")))
         .child(button("close-window", w.platform === "windows" ? svg("mods/lumiherd-tabs/win-close.svg").size(16) : svg("mods/pane/close.svg").size(13), () => run("window.close"))));

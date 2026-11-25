@@ -158,13 +158,6 @@
                       }
                     },
                     {
-                      "id": "todos",
-                      "type": "block",
-                      "content": {
-                        "mod": "lumiherd-todos"
-                      }
-                    },
-                    {
                       "id": "prompts",
                       "type": "block",
                       "content": {

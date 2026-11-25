@@ -33,7 +33,7 @@
   <rect x="92" y="64" width="70" height="4" rx="2" fill="#3fae6a"/>
   <rect x="92" y="72" width="110" height="4" rx="2" fill="#6b7480"/>
   <rect x="92" y="172" width="134" height="12" rx="3" fill="#1d242d"/>
-  <!-- the To-do panel -->
+  <!-- the side panel -->
   <rect x="240" y="24" width="74" height="170" rx="6" fill="#0f141a" stroke="#232a33" stroke-width="1"/>
   <rect x="246" y="32" width="22" height="5" rx="2" fill="#e6e8eb"/>
   <rect x="246" y="44" width="30" height="7" rx="3" fill="#1d242d"/>

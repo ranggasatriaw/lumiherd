@@ -1,7 +1,8 @@
 # Lumiherd
 
 Rangga's Herdr app layout: every project and agent in one sidebar, a Timeline,
-agentic to-dos, usage, a launcher and a Ctrl+Tab switcher.
+the agents' tasks, usage, Lumi (a chibi pet who shows how the agents are doing),
+a small shell, a launcher and a Ctrl+Tab switcher.
 
 Forked from [Over9k](https://github.com/herunan/herdr-over9k) (MIT, by the Over9k
 authors) at `193e9cc`, renamed and maintained here on its own. What it does and how
