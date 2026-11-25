@@ -162,7 +162,21 @@
                       }
                     }
                   ],
-                  "active": "files"
+                  "active": "files",
+                  "size": {
+                    "weight": 1
+                  }
+                },
+                {
+                  "id": "panel-shell",
+                  "type": "block",
+                  "size": {
+                    "px": 200
+                  },
+                  "min": 80,
+                  "content": {
+                    "terminal": "lumi-shell"
+                  }
                 }
               ],
               "size": {
@@ -170,7 +184,11 @@
               },
               "min": 280,
               "max": 900,
-              "hidden": true
+              "hidden": true,
+              "divider": {
+                "width": 1,
+                "color": "border"
+              }
             }
           ],
           "padding": 8,
