@@ -9,6 +9,10 @@ command -v hc >/dev/null 2>&1 && { hc get lumi-shell >/dev/null 2>&1 \
   || hc run --bg --no-notify --no-parent --keep --name lumi-shell --cwd "$HOME" -- /bin/sh -c 'while :; do "${SHELL:-/bin/zsh}" -l; done' >/dev/null; }
 rsync -a "$src/mods/" "$home/mods/"
 rsync -a "$src/layouts/" "$home/layouts/"
+# Imul, Lumi's little robot, as the agents' icon (a helmet colour per agent). Its
+# programs.json goes in only when there is none: one of your own is never replaced.
+mkdir -p "$home/imul" && cp "$src"/imul/*.png "$home/imul/"
+[ -e "$home/programs.json" ] || cp "$src/imul/programs.json" "$home/programs.json"
 for m in "$src"/mods/*/; do herdr-app check "$home/mods/$(basename "$m")" >/dev/null 2>&1 || echo "check failed: $(basename "$m")"; done
 # The Files panel is Herdr-Roundup's (github.com/carstenlucke/herdr-roundup): its mods are not in this repo.
 for m in roundup-files roundup-preview better-changes; do [ -d "$home/mods/$m" ] || echo "missing $m: the Files/Changes panels need Herdr-Roundup's mods/$m (roundup-*) or munza/herdr-mods' (better-changes) in $home/mods"; done

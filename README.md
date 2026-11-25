@@ -24,6 +24,11 @@ the terminal named `lumi-shell`, which `pasang.sh` starts when it isn't running.
 `exit` gives a fresh shell. Herdr removes the block from the layout if that terminal
 is removed (`hc rm lumi-shell`); run `pasang.sh` again to bring both back.
 
+Agents show as **Imul**, Lumi's little robot cat: one helmet colour per agent
+(Claude terracotta, Codex blue, omp purple), from `lumiherd/imul/` through Herdr's
+`programs.json`. `pasang.sh` writes that file only when you have none; to keep your
+own, add its three entries to yours.
+
 The Tasks panel lists the tasks of the agent you're in, as the Claude Code plugin
 [plan-progress](https://github.com/zycck/claude-mods) (MIT) keeps them: install it in
 Claude Code (`/plugin marketplace add zycck/claude-mods`, then
