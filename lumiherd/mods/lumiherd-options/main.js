@@ -9,20 +9,24 @@ import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { FolderPick } from "./folder-pick.js";
 import { helpTopics } from "./help.js";
-import { props, closeOverlay, openOverlay, theme, shared, setShared, home, appHome, pickFolder, exec, machines, readTextFile, notify } from "herdr";
+import { props, closeOverlay, openOverlay, run, theme, shared, setShared, home, appHome, pickFolder, exec, machines, readTextFile, notify } from "herdr";
 
-export const DEFAULTS = { keepUpToDate: false, handoffRule: false, todos: true, todoLog: true, todoSync: false, timeline: true, claudeStatus: false, agyStatus: false, todoFile: false, layout: "expanded", model: true, effort: true, context: true, since: true, cache: true, github: true, dirty: true, sync: true, prs: true, stars: true, issues: true,
+export const DEFAULTS = { keepUpToDate: false, handoffRule: false, timeline: true, tasks: true, panelShell: true, pet: true, agentPr: true, agentTask: true, claudeStatus: false, agyStatus: false, layout: "expanded", model: true, effort: true, context: true, since: true, cache: true, github: true, dirty: true, sync: true, prs: true, stars: true, issues: true,
   subModel: true, subEffort: true, subContext: true, subTime: true,
   usage: true, usageClaude: true, usageCodex: true, usageGemini: true, usageZai: true };
-// The To-do panel (lumiherd-todos) and the `todo` command agents use.
-const TODO_ITEMS = [
-  ["todos", "To-do", "The To-do panel, and agents keeping each project's list: the rule in CLAUDE.md and AGENTS.md, the todo command (~/.local/bin) and Claude Code's note on each message. Log and Sync are switched per project in the panel's header"],
+// What sits around the work (the right panel's tabs, the small shell, Lumi): each
+// [key, label, note]; the shell and Lumi are layout blocks, shown or hidden as switched.
+const PANEL_ITEMS = [
+  ["tasks", "Tasks", "The agent's tasks as a list (from Claude Code's plan-progress plugin). Off: the button and panel hidden"],
+  ["timeline", "Timeline", "Your prompts in the agent you're in. Off: the button and panel hidden"],
+  ["panelShell", "Small shell", "A shell under the right panel, the same whichever tab is open"],
+  ["pet", "Lumi", "Lumi above Usage: her pose and bubble follow the agents; a click goes to the one she means"],
 ];
+const BLOCKS = { panelShell: "panel-shell", pet: "pet" };
 // The mods folder as the shell scripts below get it ($3): forward slashes, which
 // sh and Python take on Windows too.
 const MODS = () => `${appHome().replace(/\\/g, "/")}/mods`;
-// What the switches set up outside Herdr (the to-do rule, command and hook,
-// the Log / Sync defaults):
+// What the switches set up outside Herdr (the session footers):
 // setup.sh, next to this file, which install.sh runs too.
 const SETUP = () => `${MODS()}/lumiherd-options/setup.sh`;
 // Each [key, label, a note under it]; the sample above shows what each looks like.
@@ -32,6 +36,8 @@ const AGENT_ITEMS = [
   ["context", "Context used"],
   ["since", "Time since last reply"],
   ["cache", "Expired cache", "Click it to start fresh from a short recap"],
+  ["agentPr", "Pull request", "#12 when its branch has an open PR; opens the PRs panel"],
+  ["agentTask", "Task now", "A third line: the step it's on and how far (plan-progress); opens Tasks"],
 ];
 // What a Claude subagent's row shows after its task (under its agent).
 const SUB_ITEMS = [
@@ -41,14 +47,14 @@ const SUB_ITEMS = [
   ["subTime", "Running for"],
 ];
 // Options' pages (the navigator on the left).
-const PAGES = [["folders", "Folders"], ["spaces", "Space rows"], ["agents", "Agent rows"], ["subs", "Subagent rows"], ["usage", "Usage"], ["todos", "To-do"], ["timeline", "Timeline"], ["claude", "Session footers"]];
+const PAGES = [["folders", "Folders"], ["spaces", "Space rows"], ["agents", "Agent rows"], ["subs", "Subagent rows"], ["usage", "Usage"], ["panels", "Panels & Lumi"], ["claude", "Session footers"]];
 // The usage section above Settings (lumiherd-usage): whether it shows, and which services.
 const USAGE_ITEMS = [
   ["usage", "Show usage", "Limits per service, above Settings"],
   ["usageClaude", "Claude", "Needs Claude Code's session footer."],
   ["usageCodex", "Codex", "From Codex's latest session"],
   ["usageGemini", "Gemini", "Includes 3rd-party (Claude, GPT) limits. Needs Antigravity's session footer."],
-  ["usageZai", "Z.ai", "GLM Coding Plan, as omp last saw it"],
+  ["usageZai", "Z.ai", "GLM Coding Plan, asked of z.ai every 5 minutes (the key in $ZAI_API_KEY or OpenUsage's)"],
 ];
 // lumiherd's handoff.sh as lumiherd installs it (relative to home): agents run it
 // by that path, so it lives outside the mod. Its --rule on|off writes or removes
@@ -98,15 +104,13 @@ export default class SidebarOptions extends View {
     this.editing = null; // another computer's folder being typed: { key, input }
   }
 
-  // Which of Lumiherd's Claude Code pieces are really set up (the switches show
-  // that, not just the last click): the to-do hook.
+  // Which of Lumiherd's session footers are really set up (the switches show
+  // that, not just the last click).
   readClaude() {
     readTextFile(`${home()}/.claude/settings.json`).then((text) => {
       let j = {};
       try { j = JSON.parse(text ?? "{}"); } catch {}
-      const cmds = (ev) => (j.hooks?.[ev] ?? []).flatMap((h) => h.hooks ?? []).map((h) => h.command ?? "");
       this.claude = {
-        todoHook: cmds("UserPromptSubmit").some((c) => c.includes("todo-hook.sh")),
         claudeStatus: /lumiherd[^/"]*\/claude-statusline\.sh/.test(j.statusLine?.command ?? ""),
         agyStatus: this.claude?.agyStatus ?? false,
       };
@@ -129,8 +133,9 @@ export default class SidebarOptions extends View {
     // The rule goes into CLAUDE.md and AGENTS.md (lumiherd's handoff.sh); it names
     // the folders, so it's written again when one changes while it's on.
     const on = o[key] ? "on" : "off";
-    const args = { todos: ["todo", on, MODS()], todoLog: ["default", "log", on], todoSync: ["default", "sync", on],
-      claudeStatus: ["status", on, MODS()], agyStatus: ["agy", on, MODS()] }[key];
+    const args = { claudeStatus: ["status", on, MODS()], agyStatus: ["agy", on, MODS()] }[key];
+    // The small shell and Lumi are blocks of the layout: shown or hidden with the switch.
+    if (BLOCKS[key]) run(o[key] ? "layout.show" : "layout.hide", { id: BLOCKS[key] });
     if (args) exec("sh", [SETUP(), ...args]).then((r) => {
       if (r?.code === 4) notify({ title: "Lumiherd needs jq", body: "Install jq (jqlang.org) for this switch, then try again.", level: "warning" });
       this.readClaude();
@@ -285,21 +290,15 @@ export default class SidebarOptions extends View {
       .child(group("Usage", "Each service's 5-hour and weekly limits. Green, yellow from 50%, red from 80%. Click a row for every limit, and a limit to make it that row's headline.", true))
       .children(USAGE_ITEMS.map(check))
       .child(needs("usage", "Claude's and Gemini's limits need their session footer."));
-    if (this.page === "timeline") return page
-      .child(group("Timeline", "Your prompts in the agent you're in, in the right panel: what it did, how long it worked, when it finished, tokens.", true))
-      .child(check(["timeline", "Timeline", "On: the Timeline button and panel. Off: both hidden"]));
+    if (this.page === "panels") return page
+      .child(group("Panels & Lumi", "What sits around your work. Files, Changes and PRs come from their own mods (Herdr-Roundup, Better Changes, Branch PR).", true))
+      .children(PANEL_ITEMS.map(check));
     if (this.page === "claude") return page
       .child(group("Session footers", "The line under an agent's prompt. Agent rows, subagent rows and Usage read each agent directly: its files, or the session footer it already shows. Some details only reach a session footer, so those agents need Lumiherd's.", true))
       .child(check(["claudeStatus", "Claude Code", "Needed for Claude's 5-hour and weekly limits (or API spend) in Usage."]))
       .child(check(["agyStatus", "Antigravity", this.agyHere === false ? "Antigravity isn't installed on this computer." : "Needed for the agent's context in Agent rows, and Gemini's limits in Usage."]))
       .child(h_flex().flex_none().pt(4).gap(14).child(goTo("link-f-agents", "agents", "Agent rows")).child(goTo("link-f-usage", "usage", "Usage")))
       .child(div().pt(8).text_size(11).text_color(t.dim).child("Codex and Pi need none. While one is on, it shows instead of any session footer you set up yourself; yours comes back when it's off. Applies to agents you start next."));
-    if (this.page === "todos") return page
-      .child(group("To-do", "Each project's list, in the right panel. Agents add to it and tick it too.", true))
-      .child(check(TODO_ITEMS[0]))
-      .when(o.todos, (el) => el.child(group("Each project starts with", "Until you switch them for a project in the To-do panel (pick its pill).", false))
-        .child(check(["todoLog", "Log", "Agents add what you ask for to the project's list"]))
-        .child(check(["todoSync", "Sync", "The project's TODO.md follows the list"])));
     return page
       .child(group("Subagent rows", "Claude Code's subagents, listed under their agent.", true))
       .child(this.sample(t, this.agentSample(t, o, true)))

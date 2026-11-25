@@ -3,7 +3,7 @@
 Run a fleet of coding agents and actually know what they're doing. Lumiherd
 shows every project and every agent in one sidebar, with each agent's status,
 model, context and where its work is going, and a Timeline of what happened,
-prompt by prompt. Agentic to-dos fill themselves in as you talk, chats hand off
+prompt by prompt. Each agent's tasks show as it works through them, chats hand off
 to become projects, expired agents clear to a token-saving recap in one click,
 past sessions resume from one menu, local models start and stop in a click, and
 every row is yours to customise.
@@ -15,7 +15,7 @@ Its six parts, each also shared on its own:
 | | |
 |---|---|
 | ![Lumiherd Sidebar](previews/lumiherd-sidebar.png) **Sidebar:** every project and every agent, in one list | ![Lumiherd Launcher](previews/lumiherd-launcher.png) **Launcher:** start, resume, run local |
-| ![Lumiherd To-do](previews/lumiherd-todo.png) **To-do:** agentic to-dos | ![Lumiherd Timeline](previews/lumiherd-timeline.png) **Timeline:** what happened, prompt by prompt |
+| **Tasks:** the agent's plan, step by step (plan-progress) | ![Lumiherd Timeline](previews/lumiherd-timeline.png) **Timeline:** what happened, prompt by prompt |
 | ![Lumiherd Usage](previews/lumiherd-usage.png) **Usage:** your limits before you hit them | ![Lumiherd Switcher](previews/lumiherd-switcher.png) **Switcher:** Ctrl+Tab between agents |
 
 ## What you see
@@ -56,29 +56,25 @@ Left to right. All colours are theme names (`canvas`, `chrome`, `background`,
 - **Work column**, filling the rest:
   - **Tabs**, 42px (`lumiherd-tabs`, a copy of Herdr's own tab bar): the space's
     tabs as pills, each with its program's icon, status and a close ×, then a +.
-    On the right are Herdr's Files and Changes buttons, plus the two Lumiherd adds,
-    To-do and Timeline. Each is a 14px icon and label, the open one on
+    On the right are Files, Changes and PRs (Herdr-Roundup, Better Changes,
+    Branch PR), plus the two Lumiherd adds, Timeline and Tasks. Each is a 14px icon and label, the open one on
     `selected`. Drags the window.
   - **Body**, 8px padding and gap:
     - **The active tab's panes:** cards with a 10px radius, a 1px `border` (or
       1px `accent` for the focused one) and Herdr's `pane` header, 30px, always
       shown.
     - **The side panel**, 368px (280 to 900), hidden until a panel button opens
-      it. It's a stack of Files, Changes, To-do (`lumiherd-todos`) and Timeline
-      (`lumiherd-prompts`).
+      it. It's a stack of Files, Changes, PRs, Timeline (`lumiherd-prompts`) and
+      Tasks (`lumiherd-tasks`), with a small shell under it (`panel-shell`, the
+      terminal named `lumi-shell`).
   - **Status bar**, 28px: Herdr's `workspace-status`.
 
-**To-do panel:**
-- A 42px header: "To-do", an outlined "N open" badge, then the **Log** and
-  **Sync** tags for the project you're in. A tag is on `raised` with `accent`
-  text when on, and plain `dim` when off.
-- Two text tabs: the project you're in (its name in its colour, with a count)
-  and **All** (pinned projects).
-- A shaded add box, "Add a to-do (#project @when)".
-- 30px rows: a 14px circle in the project's colour, the text on one line, then
-  the due time or done time in 11px, and in All the project's name, flush right.
-- A foldable **Done** section with Clear on the right, then "From TODO.md"
-  suggestions.
+**Tasks panel:**
+- A 42px header: "Tasks", a count badge, then the agent's name.
+- A card per task (plan-progress's bars for the agent's session): its title, a
+  state chip (Working, Needs you, Error, Done), a 4px progress line with
+  done/total, then every step with a mark (✓ ● ○ ✕ –). Waiting and working
+  first.
 
 **Timeline panel:**
 - A 42px header: "Timeline", an "N prompts" badge, then the agent's name and
@@ -123,15 +119,6 @@ Left to right. All colours are theme names (`canvas`, `chrome`, `background`,
 - **Panel buttons** toggle the side panel. Timeline opens only from its own
   button: if anything else turns the panel to it, the tab bar puts the previous
   panel back.
-- **To-do:**
-  - Click the circle to tick. Double-click to edit.
-  - The bot button (on hover) opens a card. **Current conversation** sends the
-    to-do to an agent already in that project. **New conversation** starts a
-    new one of the kind picked.
-  - `@fri 3pm` and `#api` in the add box set a due time and a project.
-  - On the project tab, Ctrl or Shift-click picks rows. A bar then shows "N
-    selected" and Cancel, above Mark done, Send to agent and Delete (click
-    twice).
 - **Timeline:**
   - Click a card to read the whole prompt and the reply, rendered as Markdown.
   - While the agent works, its time and ↓ tokens are read from the CLI's own
@@ -155,14 +142,15 @@ Left to right. All colours are theme names (`canvas`, `chrome`, `background`,
   - `work` column: `tabs` (lumiherd-tabs), `work-body` row, and `status`
     (workspace-status).
   - `work-body` row: `main` (`tab: active`, with a pane header from `pane`)
-    and `panel`, a column holding the `panel-body` stack: files, changes,
-    todos, prompts.
+    and `panel`, a column holding the `panel-body` stack (files, changes, prs,
+    prompts, tasks) and the `panel-shell` terminal block. The sidebar column
+    holds a `pet` block (`lumi-pet`) above `usage`.
 - **Mods**, all `"place": "none"`:
   - `lumiherd`: the sidebar. It also writes shared state the others read:
     `lumiherd.recentAgents`, `projects.pinned`, `projects.listed`.
   - `lumiherd-usage`, `lumiherd-footer`, `lumiherd-tabs`.
-  - `lumiherd-todos` (with `todo.sh`, `todo-cross.py`, `todo-hook.sh`) and
-    `lumiherd-prompts` (with `prompts.py`).
+  - `lumiherd-prompts` (with `prompts.py`), `lumiherd-tasks`, and `lumi-pet`
+    (with its pictures and `make-animation.py`).
   - Overlays: `lumiherd-menu`, `lumiherd-new-menu` (with `resume.sh`),
     `lumiherd-switcher`, `lumiherd-close`, `lumiherd-rename`, `lumiherd-handoff`,
     `lumiherd-server-stop`, `lumiherd-panel`.
@@ -182,12 +170,9 @@ Left to right. All colours are theme names (`canvas`, `chrome`, `background`,
 - **Programs:**
   - `sh` runs the scripts. `git` reads status and fetches every 5 minutes.
   - `gh` (GitHub) or `glab` (GitLab) counts open PRs or MRs, if installed. `jq` is used by the scripts.
-  - Python 3 runs the Timeline reader and the TODO.md sync. `ps`, `curl` (local
+  - Python 3 runs the Timeline reader and the agents' details (claude-info.py, omp-info.py). `ps`, `curl` (local
     model servers) and `kill` are used too.
 - **Outside Herdr**, turned on from Options:
-  - The `todo` command: a wrapper in `~/.local/bin` for `lumiherd-todos/todo.sh`.
-    It keeps lists in `~/.local/share/lumiherd/todos/<slug>.md`.
-  - The to-do rule in CLAUDE.md and AGENTS.md, and a UserPromptSubmit hook.
   - The sidebar copies `handoff.sh` and `resume.sh` to `~/.local/share/lumiherd`.
 - **Art:** lucide-style 24px stroke icons (bot, subagent, cpu, clock, github,
   pull-request, log, sync, timeline, handoff) and `qwen.svg`.
@@ -243,19 +228,19 @@ Left to right. All colours are theme names (`canvas`, `chrome`, `background`,
 
 - `layout.switch {"name": "lumiherd"}` shows:
   - the sidebar: brand, spaces, usage, footer
-  - the tab bar with Files, Changes, To-do and Timeline
+  - the tab bar with Files, Changes, PRs, Timeline and Tasks
   - pane cards
   - the status bar
-- `herdr-app status` shows no errors, and `herdr-app check` passes for all 15
-  `mods/lumiherd*` folders.
+- `herdr-app status` shows no errors, and `herdr-app check` passes for every
+  `mods/lumiherd*` folder and `mods/lumi-pet`.
 - With a Claude Code agent running in a project, its row shows a spinner while
   it works. Its details show the model, effort and context %, the same as
   Claude Code's own `/context`.
 - Opening Timeline shows that agent's prompts newest first. The working turn's
   time and ↓ tokens match the CLI's spinner line.
-- `todo add "x"` in a project shows "x" in the To-do panel within a second.
-  Ticking it in the panel shows it done in `todo`.
+- With plan-progress installed, an agent's task shows in Tasks and as a third
+  line under its row.
 - Ctrl+Tab lists agents most recent first, and letting go of Ctrl focuses the
   picked one.
 - Closing a tab with a working agent asks first, and names what ends.
-- Help shows the To-do, Timeline and Usage pages under Panels.
+- Help shows Tasks, Files/Changes/PRs, Small shell, Timeline and Usage under Panels, and Lumi under Extras.

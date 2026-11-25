@@ -242,7 +242,7 @@ const dotted = (parts) => parts.flatMap((el, n) => (n ? [div().px(1).child("\u00
 
 // Agent rows' layout and what they show, until lumiherd-options says otherwise
 // (shared "sidebar.options"; the same defaults as there).
-const OPTIONS = { keepUpToDate: false, layout: "expanded", model: true, effort: true, context: true, since: true, cache: true, github: true, dirty: true, sync: true, prs: true, stars: true, issues: true,
+const OPTIONS = { keepUpToDate: false, agentPr: true, agentTask: true, layout: "expanded", model: true, effort: true, context: true, since: true, cache: true, github: true, dirty: true, sync: true, prs: true, stars: true, issues: true,
   subModel: true, subEffort: true, subContext: true, subTime: true };
 
 // Model families with a logo of their own, a badge on the agent's icon.
@@ -889,7 +889,7 @@ export default class Spaces extends View {
   // The open pull request of the branch this terminal's folder is on (its space's when
   // the folder isn't listed): "#12" with the PR icon, a click shows it in the PRs panel. Null without one.
   prChip(space, p, t) {
-    if (!this.frame.options.prs) return null;
+    if (!this.frame.options.prs || this.frame.options.agentPr === false) return null;
     const g = (p.cwd && this.git[JSON.stringify([space.machine ?? null, p.cwd])]) || (!space.machine && space.folder ? this.git[where(space)] : null);
     const pr = g?.slug && g.branch ? this.prs[g.slug]?.byBranch?.[g.branch] : null;
     if (!pr) return null;
@@ -1171,7 +1171,7 @@ export default class Spaces extends View {
       // SSH'd elsewhere: lit while its row there is hovered, and hovering it lights that one (sshRows).
       const sshed = this.sshedTo(p.terminal, "self");
       // Its plan-progress task now, on a third line (expanded rows only).
-      const task = a && two ? this.taskOf(a) : null;
+      const task = a && two && opt.agentTask !== false ? this.taskOf(a) : null;
       const row = lit(h_flex().id(`term-${p.terminal}`), this.hoverLink?.source === p.terminal && this.hoverLink).h(two ? (task ? 64 : 46) : 26).flex_none().pl(4 + indent).pr(8).gap(two ? 10 : 8).items_center().rounded(two ? 8 : 7)
         .when(Boolean(two), (el) => el.my(2))
         .when(space.active && p.focused && !picked, (el) => el.bg(t.hover))

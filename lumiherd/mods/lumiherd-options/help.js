@@ -118,12 +118,18 @@ export function helpTopics(view, t) {
   const part = (name, ...topics) => topics.map((x) => ({ ...x, part: name }));
   const side = (...pics) => v_flex().gap(6).children(pics.map((p, i) => (i ? h_flex().child(div().w(300).flex_none().child(p)) : p)));
   const done = t.done ?? t.accent;
-  // The To-do panel's rows, a Timeline card, a usage row.
-  const todoRow = (text, ticked, when = "") => h_flex().h(28).px(8).gap(8).items_center().text_size(12.5)
-    .child(div().size(13).flex_none().rounded(7).border(1.5).border_color(BLUE).when(ticked, (el) => el.bg(BLUE).flex().items_center().justify_center()
-      .child(svg(`${CHROME}/check.svg`).size(8).text_color(t.background))))
-    .child(div().flex_1().min_w(0).truncate().text_color(ticked ? t.dim : t.foreground).when(ticked, (el) => el.line_through()).child(text))
-    .when(Boolean(when), (el) => el.child(small(when)));
+  // A Timeline card, a usage row, a PR chip and a task line (as the sidebar draws them).
+  const prChip = (n) => h_flex().flex_none().h(16).px(4).gap(3).items_center().rounded(4).bg(wash(t.accent, "1f")).text_size(10.5).text_color(t.accent)
+    .child(svg("mods/lumiherd/pull-request.svg").size(10).flex_none()).child(`#${n}`);
+  const taskLine = (step, done, total, color = t.working) => h_flex().min_w(0).h(15).gap(6).items_center().text_size(11.5)
+    .child(div().size(6).rounded(3).flex_none().bg(color))
+    .child(div().flex_1().min_w(0).truncate().text_color(t.muted).child(step))
+    .child(div().w(34).h(3).flex_none().rounded(2).bg(t.border).child(div().h_full().rounded(2).bg(color).w(`${Math.round((done * 100) / total)}%`)))
+    .child(div().flex_none().text_size(10.5).text_color(t.dim).child(`${done}/${total}`));
+  const taskCard = (title, steps) => v_flex().gap(4).px(10).py(8).rounded(8).bg(t.background).border_1().border_color(t.border)
+    .child(h_flex().gap(8).items_center().child(div().flex_1().text_size(12.5).font_semibold().child(title))
+      .child(div().px(6).py(1).rounded(5).bg(wash(t.working, "26")).text_color(t.working).text_size(10.5).child("Working")))
+    .children(steps.map(([m, c, text]) => h_flex().gap(8).text_size(12).child(div().w(12).text_color(c).child(m)).child(div().text_color(m === "✓" ? t.muted : t.foreground).child(text))));
   const tlCard = (n, at, text, info, live) => h_flex().gap(8).px(6).py(4).items_start()
     .child(div().mt(4).size(9).flex_none().rounded(5).border_2().border_color(live ? t.working : t.border).when(live, (el) => el.bg(t.working)))
     .child(v_flex().flex_1().min_w(0).gap(2).px(9).py(6).rounded(8).bg(live ? t.raised : t.chrome)
@@ -189,6 +195,21 @@ export function helpTopics(view, t) {
           line(small("2m"), "Since its last reply"),
           line(key("Double-click"), "Rename"),
         ]),
+      topic("Pull request & task",
+        frame(
+          v_flex().gap(2).px(4).py(4).rounded(7)
+            .child(h_flex().gap(8).items_center()
+              .child(h_flex().w(16).flex_none().justify_center().child(spinner()))
+              .child(logo("claude"))
+              .child(v_flex().flex_1().min_w(0).gap(2)
+                .child(h_flex().gap(6).items_center().child(div().flex_1().min_w(0).truncate().text_size(12.5).child("Fix the login bug")).child(prChip(42)))
+                .child(h_flex().text_size(11).text_color(t.dim).children(dotted(facts("Opus 5.5", "high", pct(42)))))
+                .child(taskLine("Write the regression test", 2, 5))))), [
+          line(prChip(42), "Its branch has an open pull request: click for the PRs panel"),
+          line(small("2/5"), "Its task now, from plan-progress: click for the Tasks panel"),
+          note("Subagents show under their agent, open; their chip folds them"),
+          note("Both can be switched off in Options › Agent rows"),
+        ]),
       topic("Agents view",
         frame(filter(true),
           section("Needs you", t.blocked, 1),
@@ -229,25 +250,27 @@ export function helpTopics(view, t) {
         ])),
 
     part("Panels",
-      topic("To-do",
-        frame(
-          h_flex().h(28).px(8).gap(2).items_center().text_size(11.5)
-            .child(h_flex().h(20).px(7).gap(4).items_center().rounded(5).bg(t.raised).child(div().text_color(BLUE).child("my-app")).child(div().text_color(t.dim).child("2")))
-            .child(h_flex().h(20).px(7).gap(4).items_center().rounded(5).text_color(t.muted).child("All").child(div().text_color(t.dim).child("5")))
-            .child(div().flex_1())
-            .child(h_flex().px(5).py(1).gap(4).rounded(4).bg(t.raised).text_size(10.5).text_color(t.accent).child(icon("mods/lumiherd-todos/log.svg", 10, t.accent)).child("Log"))
-            .child(h_flex().px(5).py(1).gap(4).text_size(10.5).text_color(t.dim).child(icon("mods/lumiherd-todos/sync.svg", 10)).child("Sync")),
-          todoRow("Fix the footer on mobile", false, "today 15:00"),
-          todoRow("Release notes for 2.1", false),
-          h_flex().h(24).mt(2).px(8).gap(7).items_center().text_size(11).text_color(t.dim).child(chev("down")).child("Done").child(div().text_color(t.muted).child("12")),
-          todoRow("Move the API keys out of the repo", true, "09:12")), [
-          note("Each project's own list. Agents add and tick items too"),
-          line(key("@"), "When it's due: @fri 3pm, @tomorrow, @in 2 hours"),
-          line(key("#"), "Another project: #api tidy the logs"),
-          line(icon(BOT, 11), "Send to this conversation or a new agent"),
-          line(key(pickClick()), "Pick several: mark done, send or delete together"),
-          line(small("Log"), "Agents add what you ask for in this project"),
-          line(small("Sync"), "Its TODO.md follows the list"),
+      topic("Tasks",
+        frame(taskCard("Fix the login bug", [["✓", t.ansi2, "Find where the session drops"], ["✓", t.ansi2, "Fix the cookie domain"], ["●", t.working, "Write the regression test"], ["○", t.dim, "Open the PR"]])), [
+          note("The tasks of the agent you're in, as Claude Code's plan-progress plugin keeps them"),
+          line(small("✓ ● ○"), "Done, working on it, to do (✕ failed)"),
+          note("Waiting and working tasks first. Install plan-progress in Claude Code: see the README"),
+        ]),
+      topic("Files, Changes, PRs",
+        frame(h_flex().h(30).px(6).gap(3).items_center().text_size(12)
+          .children([["mods/files/file.svg", "Files"], ["mods/changes/changes.svg", "Changes"], ["mods/lumiherd/pull-request.svg", "PRs"]].map(([i, n], k) => h_flex().h(24).px(8).gap(5).items_center().rounded(6)
+            .when(k === 2, (el) => el.bg(t.selected)).text_color(k === 2 ? t.foreground : t.muted).child(svg(i).size(13)).child(n)))), [
+          line(key("Files"), "The project's files; open one to preview it (Herdr-Roundup)"),
+          line(key("Changes"), "What changed, file by file (Better Changes)"),
+          line(key("PRs"), "The branch's pull request: checks, reviews, merge (Branch PR)"),
+          note("Each is its own mod, installed apart: see the README"),
+        ]),
+      topic("Small shell",
+        frame(h_flex().h(54).px(10).items_center().rounded(8).bg(t.background).border_1().border_color(t.border).text_size(12)
+          .child(div().text_color(t.ansi2).child("❯")).child(div().pl(6).text_color(t.muted).child("git status"))), [
+          note("A shell under the right panel, the same whichever tab is open (the terminal named lumi-shell)"),
+          line(key("exit"), "Gives a fresh shell; the box stays"),
+          note("Hide it in Options › Panels & Lumi"),
         ]),
       topic("Timeline",
         frame(
@@ -259,11 +282,11 @@ export function helpTopics(view, t) {
           line(small("context"), "What it holds now (header)"),
         ]),
       topic("Usage",
-        frame(usageRow("Claude", "Max", "2d 11h", 81), usageRow("Codex", "Plus", "12d 19h", 52), usageRow("Gemini", "Pro", "42m", 9)), [
+        frame(usageRow("Claude", "Max", "2d 11h", 81), usageRow("Codex", "Plus", "12d 19h", 52), usageRow("Z.ai", "Lite", "3h 1m", 17)), [
           note("Each service's 5-hour and weekly limits, above Settings"),
           line(pct(9), "Under 50%"), line(pct(52), "From 50%"), line(pct(81), "From 80%"),
           line(key("Click"), "Every limit, and when each resets"),
-          note("Claude's and Gemini's need their session footer (next page)"),
+          note("Claude's and Gemini's need their session footer (next page); Z.ai's asks z.ai with your key"),
           note("Pick which show in Options › Usage"),
         ]),
       topic("Session footers",
@@ -273,11 +296,23 @@ export function helpTopics(view, t) {
           note("The line under an agent's prompt. Agent rows, subagent rows and Usage read each agent directly: its files, or the session footer it shows"),
           line(logo("claude"), "Claude Code: Lumiherd's adds your 5-hour and weekly limits (or API spend) to Usage"),
           line(logo("antigravity"), "Antigravity: Lumiherd's adds its context to Agent rows, and Gemini's limits to Usage"),
-          line(h_flex().gap(4).child(logo("codex")).child(logo("pi")), "Codex and Pi: none needed"),
+          line(h_flex().gap(4).child(logo("codex")).child(logo("pi")), "Codex, Pi and omp: none needed"),
           note("Turn them on in Options › Session footers. Any you set up yourself comes back when off"),
         ])),
 
     part("Extras",
+      topic("Lumi",
+        frame(h_flex().h(104).px(8).gap(4).items_end().justify_end()
+          .child(div().mb(40).px(10).py(7).rounded(12).bg(t.background).border_1().border_color(t.border).text_size(11.5).child("Psst, Fix the login bug nungguin jawabanmu!"))
+          .child(image("mods/lumi-pet/blocked.png").w(96).h(96).flex_none())), [
+          note("Lumi above Usage. Her pose follows the agents, the most urgent first:"),
+          line(small("waves"), "One needs you"),
+          line(small("cheers"), "One finished while you weren't looking"),
+          line(small("types"), "One is working"),
+          line(small("sleeps"), "All idle"),
+          line(key("Click"), "Go to the agent she means"),
+          note("Hide her in Options › Panels & Lumi"),
+        ]),
       topic("Select several",
         side(
           frame(
@@ -320,6 +355,7 @@ export function helpTopics(view, t) {
             .child(svg("mods/lumiherd/qwen.svg").size(10).text_color("#6f69f7")).child("Qwen3")] }))))), [
           line(key("Model ›"), "Pi on one of its models, local ones too (Pi's models.json)"),
           line(small("Qwen3"), "A running server. Click to stop it"),
+          line(logo("pi"), "omp (oh-my-pi) agents show their model, effort and context like Claude's"),
         ]),
       topic("Hand-off",
         frame(
