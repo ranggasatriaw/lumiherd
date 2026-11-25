@@ -34,19 +34,19 @@
               "size": {
                 "weight": 1
               },
-              "min": 90,
-              "floating": [
-                {
-                  "id": "lumi-pet",
-                  "content": {
-                    "mod": "lumi-pet"
-                  },
-                  "edge": "bottom",
-                  "align": "end"
-                }
-              ]
+              "min": 90
             }
           ]
+        },
+        {
+          "id": "pet",
+          "type": "block",
+          "size": {
+            "px": 112
+          },
+          "content": {
+            "mod": "lumi-pet"
+          }
         },
         {
           "id": "usage",
