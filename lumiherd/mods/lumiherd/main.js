@@ -342,8 +342,8 @@ export default class Spaces extends View {
     // Claude Code's status line also says when it last replied (lastAt).
     try { this.lastWork = JSON.parse(localStorage.getItem("agents.lastWork") ?? "{}"); } catch { this.lastWork = {}; }
     this.wasWorking = {};
-    // Agents whose sub-agents are shown (folded by default).
-    try { this.subsOpen = new Set(JSON.parse(localStorage.getItem("agents.subsOpen") ?? "[]")); } catch { this.subsOpen = new Set(); }
+    // Agents whose sub-agents are folded (shown by default).
+    try { this.subsClosed = new Set(JSON.parse(localStorage.getItem("agents.subsClosed") ?? "[]")); } catch { this.subsClosed = new Set(); }
     // The filter at the top (filterBar): null shows everything, else only agents
     // in that state (FILTERS) and the spaces they're in.
     try { this.filter = localStorage.getItem("agents.filter") || null; } catch { this.filter = null; }
@@ -875,9 +875,31 @@ export default class Spaces extends View {
   // What shows is up to lumiherd-options (o): each item, joined by dots.
   // How many agents, subagents and processes an agent has started (BOT / SUB / CPU), a
   // click shows or hides them (subRows); hovered, in words.
+  // The open pull request of the branch this terminal's folder is on (its space's when
+  // the folder isn't listed): "#12" with the PR icon, a click opens it. Null without one.
+  prChip(space, p, t) {
+    if (!this.frame.options.prs) return null;
+    const g = (p.cwd && this.git[JSON.stringify([space.machine ?? null, p.cwd])]) || (!space.machine && space.folder ? this.git[where(space)] : null);
+    const pr = g?.slug && g.branch ? this.prs[g.slug]?.byBranch?.[g.branch] : null;
+    if (!pr) return null;
+    return h_flex().id(`pr-chip-${p.pane}`).flex_none().h(16).px(4).gap(3).items_center().rounded(4).cursor_pointer()
+      .text_size(10.5).text_color(pr.draft ? t.dim : t.accent).bg((pr.draft ? t.dim : t.accent) + "1f")
+      .hover((x) => x.bg((pr.draft ? t.dim : t.accent) + "38"))
+      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+      .on_click((_e, cx) => { cx.stop_propagation(); cx.open_url(pr.url); })
+      .child(svg("mods/lumiherd/pull-request.svg").size(10).flex_none())
+      .child(`#${pr.number}${pr.draft ? " draft" : ""}`);
+  }
+
+  subsShown(address) { return !this.subsClosed.has(address); }
+  toggleSubs(address) {
+    this.subsClosed.has(address) ? this.subsClosed.delete(address) : this.subsClosed.add(address);
+    localStorage.setItem("agents.subsClosed", JSON.stringify([...this.subsClosed]));
+  }
+
   subsChip(a, p, t) {
     const id = `subs-${a.address}`;
-    const chevron = () => svg(`mods/workspace-chrome/chevron-${this.subsOpen.has(a?.address) ? "down" : "right"}.svg`).size(8);
+    const chevron = () => svg(`mods/workspace-chrome/chevron-${this.subsShown(a?.address) ? "down" : "right"}.svg`).size(8);
     // White (the theme's text colour) on a faint wash of it.
     const fg = t.foreground, wash = (a) => (/^#[0-9a-f]{6}$/i.test(fg) ? fg + a : t.raised);
     const chip = () => h_flex().h(16).px(4).gap(3).items_center().rounded(4).text_size(10.5).text_color(fg);
@@ -892,11 +914,10 @@ export default class Spaces extends View {
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
       .on_click((_e, cx) => {
         cx.stop_propagation();
-        this.subsOpen.has(a.address) ? this.subsOpen.delete(a.address) : this.subsOpen.add(a.address);
-        localStorage.setItem("agents.subsOpen", JSON.stringify([...this.subsOpen]));
+        this.toggleSubs(a.address);
         cx.notify();
       })
-      // Brighter while its row is hovered (a click anywhere on the row folds it too).
+      // Brighter while its row is hovered.
       .child(chip().bg(wash(this.hoverTerm === p.pane ? "29" : "1a"))
         .when(compact, (el) => el.child(String(n.agents + n.inner + n.processes + n.crons)))
         .when(!compact && n.agents > 0, (el) => el.child(svg(BOT).size(10).flex_none()).child(String(n.agents)))
@@ -1114,12 +1135,6 @@ export default class Spaces extends View {
           if (e.click_count === 2) return this.renamePane(p, a, tab);
           this.sel.clear();
           this.anchor = `p:${p.pane}`;
-          // An agent with things under it: a click shows or hides them too (as its chip does).
-          if (a && this.subCount(a) > 0) {
-            this.subsOpen.has(a.address) ? this.subsOpen.delete(a.address) : this.subsOpen.add(a.address);
-            localStorage.setItem("agents.subsOpen", JSON.stringify([...this.subsOpen]));
-            cx.notify();
-          }
           if (!space.active) run("space.select", { id: space.id });
           run("pane.focus", { pane: p.pane });
         })
@@ -1147,13 +1162,13 @@ export default class Spaces extends View {
             // Its link and count chips: after its details (infoLine) on one line; on
             // two (expanded) or with no details, here on the name's line, at its end,
             // so the line under has the whole width.
-            .when(!info || two, (el) => el.when(Boolean(two), (x) => x.child(div().flex_1())).children([this.endChips(a, p, t)].filter(Boolean))))
+            .when(!info || two, (el) => el.when(Boolean(two), (x) => x.child(div().flex_1())).children([this.prChip(space, p, t), this.endChips(a, p, t)].filter(Boolean))))
           .when(Boolean(two), (el) => el.overflow_hidden().child(info ? this.agentDetails(info, t, a, p, opt, false).text_size(11.5).line_height("15px")
             : h_flex().min_w(0).items_center().text_size(11.5).line_height("15px").text_color(t.dim)
               .children(dotted([div().text_color(this.tagWhere?.color ?? t.dim).child(this.tagWhere?.folder ?? ""), this.tagWhere?.machine && div().child(this.tagWhere.machine)].filter(Boolean))))))
         .when(Boolean(info) && !two, (el) => el.child(this.agentDetails(info, t, a, p, opt)));
       // Its sub-agents nested under it (subRows), unless folded.
-      return [row, ...(a && this.subsOpen.has(a.address) ? this.subRows(a, p, t, indent) : [])];
+      return [row, ...(a && this.subsShown(a.address) ? this.subRows(a, p, t, indent) : [])];
     });
   }
 
@@ -2499,12 +2514,14 @@ export default class Spaces extends View {
       this.write[g.slug] = ["ADMIN", "MAINTAIN", "WRITE"].includes(perm);
       this.repoInfo[g.slug] = { stars: Number(stars) || 0, issues: Number(issues) || 0 };
     }
-    const r = await exec("gh", ["pr", "list", "--repo", g.slug, "--state", "open", "--limit", "100", "--json", "number,reviewRequests,author"]);
+    const r = await exec("gh", ["pr", "list", "--repo", g.slug, "--state", "open", "--limit", "100", "--json", "number,reviewRequests,author,headRefName,url,isDraft"]);
     if (r.code === 0) {
       // Someone else's project you only cloned: just the PRs that involve you.
       const list = JSON.parse(r.stdout).filter((p) => this.write[g.slug] !== false || p.author?.login === me
         || (p.reviewRequests ?? []).some((q) => q.login === me));
-      this.prs[g.slug] = { open: list.length, review: list.filter((p) => (p.reviewRequests ?? []).some((q) => q.login === me)).length };
+      const byBranch = {};
+      for (const p of list) byBranch[p.headRefName] ??= { number: p.number, url: p.url, draft: p.isDraft };
+      this.prs[g.slug] = { open: list.length, review: list.filter((p) => (p.reviewRequests ?? []).some((q) => q.login === me)).length, byBranch };
     }
   }
 
