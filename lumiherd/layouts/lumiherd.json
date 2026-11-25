@@ -39,6 +39,16 @@
           ]
         },
         {
+          "id": "pet",
+          "type": "block",
+          "size": {
+            "px": 112
+          },
+          "content": {
+            "mod": "lumi-pet"
+          }
+        },
+        {
           "id": "usage",
           "type": "block",
           "content": {
