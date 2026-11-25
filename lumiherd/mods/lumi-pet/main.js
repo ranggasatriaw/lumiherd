@@ -4,14 +4,17 @@
 //   one finished unseen  cheering
 //   one is working       typing on a laptop
 //   all idle             asleep
-// Beside her, a speech bubble says it casually, naming the agent's space ("Psst,
-// fastr_nata nungguin jawabanmu!"); its line changes with the state and every
+// Beside her, a speech bubble says it casually, naming the agent as the sidebar does
+// (its tab's name, else its session's title, else its space: "Psst, FastrHR
+// Planner nungguin jawabanmu!"); its line changes with the state and every
 // couple of minutes. A click goes to that agent. Pictures: <pose>.webp next to
 // this file when there is one (a looping animation), else <pose>.png.
 
 import { View, div, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { theme, agents, run, exec, appHome } from "herdr";
+// A copy of lumiherd's (mods can't import from each other): an agent's name from its title.
+import { agentTask } from "./agent-name.js";
 
 const SIZE = 96;
 const POSES = ["blocked", "working", "done", "idle"];
@@ -31,7 +34,14 @@ const LINES = {
   },
   idle: { one: ["Sepi… aku bobo dulu ya", "Zzz… bangunin kalau butuh", "Lagi santai, belum ada kerjaan"] },
 };
-const EVERY = 120000; // a new line this often while the state stays
+const EVERY = 120000;
+
+// The agent's name: a tab named by hand, else its session's title, else its space.
+function name(a) {
+  const tab = a.tab_name ?? "";
+  if (tab && tab !== a.program?.name && !/^(\d+|t[0-9a-z]+)$/.test(tab)) return tab;
+  return agentTask(a, null) || a.space_name || "agen";
+} // a new line this often while the state stays
 
 export default class LumiPet extends View {
   init(_props, cx) {
@@ -57,7 +67,7 @@ export default class LumiPet extends View {
     const list = agents() ?? [];
     for (const s of ["blocked", "done", "working"]) {
       const these = list.filter((a) => a.status === s).sort((x, y) => (y.seq ?? 0) - (x.seq ?? 0));
-      if (these.length) return { pose: s, count: these.length, to: these[0].address, space: these[0].space_name || "agen" };
+      if (these.length) return { pose: s, count: these.length, to: these[0].address, space: name(these[0]) };
     }
     return { pose: "idle", count: 0, to: null, space: null };
   }
