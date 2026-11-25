@@ -116,7 +116,9 @@ const inside = (cwd, dir) => cwd === dir || cwd?.startsWith(dir + "/");
 const isPi = (a) => a.app === "pi" || a.program?.key === "pi";
 // Possibly Antigravity: agy-info.py, which only answers for terminals agy runs in,
 // is asked about any agent that isn't Claude Code, Codex or Pi.
-const isAgy = (a) => !isClaude(a) && !isPi(a) && !/codex/i.test(`${a.app ?? ""} ${a.program?.key ?? ""}`);
+// oh-my-pi (omp): its own sessions and models (omp-info.py).
+const isOmp = (a) => a.app === "omp" || a.program?.key === "omp";
+const isAgy = (a) => !isClaude(a) && !isPi(a) && !isOmp(a) && !/codex/i.test(`${a.app ?? ""} ${a.program?.key ?? ""}`);
 const isClaude = (a) => a.app === "claude-code" || a.program?.key === "claude";
 // Pi's footer: "↑5.5k ↓72 8.6%/66k (auto)  …  qwen3.8-27b • medium" (tokens in and
 // out once it has replied, then context used, model, thinking).
@@ -652,9 +654,10 @@ export default class Spaces extends View {
         // and agy-info.py there, from each one's own files.
         this.ciScript ??= await readTextFile(`${appHome()}/mods/lumiherd/claude-info.py`).catch(() => null);
         this.aiScript ??= await readTextFile(`${appHome()}/mods/lumiherd/agy-info.py`).catch(() => null);
-        const ci = {}, ai = {};
+        this.oiScript ??= await readTextFile(`${appHome()}/mods/lumiherd/omp-info.py`).catch(() => null);
+        const ci = {}, ai = {}, oi = {};
         for (const a of [...listed, ...kids]) {
-          const [script, into] = isClaude(a) ? [this.ciScript, ci] : isAgy(a) ? [this.aiScript, ai] : [null, null];
+          const [script, into] = isClaude(a) ? [this.ciScript, ci] : isOmp(a) ? [this.oiScript, oi] : isAgy(a) ? [this.aiScript, ai] : [null, null];
           if (!script) continue;
           const [m] = a.address.includes("/") ? a.address.split("/") : [null];
           const key = m ?? "";
@@ -666,7 +669,7 @@ export default class Spaces extends View {
           const [m, t] = a.address.includes("/") ? a.address.split("/") : [null, a.address];
           if (m && !(this.remote[m]?.home && this.machines.some((x) => x.name === m && x.state === "connected"))) continue;
           try {
-            const found = ci[m ?? ""]?.[t];
+            const found = ci[m ?? ""]?.[t] ?? oi[m ?? ""]?.[t];
             const agy = ai[m ?? ""]?.[t];
             // Antigravity: what its status line saved, if it's on, adds the context
             // (agy's files don't have it readably); the rest from agy-info.py wins.
@@ -2311,9 +2314,15 @@ export default class Spaces extends View {
     for (const sec of SECTIONS) {
       const list = this.frame.ag.filter((a) => a.status === sec.status && at.has(a.pane)).sort((x, y) => (y.seq ?? 0) - (x.seq ?? 0));
       if (!list.length) continue;
-      out.push(h_flex().id(`section-${sec.status}`).h(26).mt(out.length ? 8 : 2).px(8).gap(6).flex_none().items_center().text_size(11.5).text_color(t.muted)
-        .child(div().size(6).rounded(3).flex_none().bg(t[sec.status] ?? t.dim))
-        .child(sec.label).child(div().text_color(t.dim).child(String(list.length))));
+      // A band in the state's colour (a wash of it, the label in it, the count on a
+      // stronger wash), so Needs you stands out from Working and Idle at a glance.
+      const c = t[sec.status] ?? t.dim, wash = (a) => (/^#[0-9a-f]{6}$/i.test(c) ? c + a : t.raised);
+      out.push(h_flex().id(`section-${sec.status}`).h(28).mt(out.length ? 12 : 4).mb(2).px(10).gap(7).flex_none().items_center()
+        .rounded(7).bg(wash("1f")).text_size(12).font_semibold().text_color(c)
+        .child(div().size(8).rounded(4).flex_none().bg(c))
+        .child(sec.label)
+        .child(div().flex_1())
+        .child(h_flex().h(18).min_w(20).px(6).justify_center().items_center().rounded(9).bg(wash("38")).text_size(11).child(String(list.length))));
       for (const a of list) {
         const g = at.get(a.pane);
         // Its own row (and what it started) only, naming where it is.
