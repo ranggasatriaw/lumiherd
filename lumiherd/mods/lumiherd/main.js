@@ -26,7 +26,7 @@ const python = (args) => (PY ??= exec("python3", ["-c", "1"]).then((r) => (r?.co
 // happens at once, as Herdr does.
 function closeAsk(picked) {
   const p = plan(picked);
-  if (!p.spaces && !p.working) for (const c of p.commands) run(c.name, c.args);
+  if (!p.spaces && !p.agents) for (const c of p.commands) run(c.name, c.args);
   else openOverlay({ mod: "lumiherd-close", kind: "dialog", width: 380, height: 150, props: picked });
 }
 
@@ -364,7 +364,7 @@ export default class Spaces extends View {
     this.me = {}; // your login per host: { github, gitlab }
     this.armed = null; // ↑ clicked once: { repo, until }; a second click pushes
     this.sel = new Set(); // Ctrl+clicked rows: "s:<space>", "p:<pane>", "d:<project folder>"
-    // Keys bound to this mod (keys.json): ctrl-shift-w is "lumiherd.close-tab".
+    // Keys bound to this mod (keys.json, layout:lumiherd): cmd-w is "lumiherd.close-tab", cmd-shift-w "lumiherd.close-pane".
     cx.spawn(async (cx) => {
       for (;;) {
         const c = await nextCommand();
