@@ -176,7 +176,23 @@
                   "min": 80,
                   "content": {
                     "terminal": "lumi-shell"
-                  }
+                  },
+                  "background": "background",
+                  "border": {
+                    "width": 1,
+                    "color": "border"
+                  },
+                  "focus": {
+                    "border": {
+                      "width": 1,
+                      "color": "accent"
+                    }
+                  },
+                  "radius": 10,
+                  "padding": [
+                    6,
+                    8
+                  ]
                 }
               ],
               "size": {
@@ -185,10 +201,7 @@
               "min": 280,
               "max": 900,
               "hidden": true,
-              "divider": {
-                "width": 1,
-                "color": "border"
-              }
+              "gap": 8
             }
           ],
           "padding": 8,
