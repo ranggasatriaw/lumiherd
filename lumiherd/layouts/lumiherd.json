@@ -160,6 +160,13 @@
                       "content": {
                         "mod": "lumiherd-prompts"
                       }
+                    },
+                    {
+                      "id": "tasks",
+                      "type": "block",
+                      "content": {
+                        "mod": "lumiherd-tasks"
+                      }
                     }
                   ],
                   "active": "files",

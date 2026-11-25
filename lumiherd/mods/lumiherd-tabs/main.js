@@ -131,6 +131,8 @@ export default class Tabs extends View {
       .when(todosOn, el => el.child(panelButton("todos", "To-do", "mods/workspace-chrome/circle-check.svg")))
       // Your prompts in the agent you're in, as a timeline (lumiherd-prompts).
       .when(timelineOn, el => el.child(panelButton("prompts", "Timeline", "mods/lumiherd-prompts/timeline.svg")))
+      // The agent's plan-progress tasks as a list (lumiherd-tasks).
+      .child(panelButton("tasks", "Tasks", "mods/workspace-chrome/circle-check.svg"))
       .when(w?.buttons, el => el.child(button("minimize", w.platform === "windows" ? svg("mods/lumiherd-tabs/win-min.svg").size(16) : "−", () => run("window.minimize")))
         .child(button("maximize", w.platform === "windows" ? svg(`mods/lumiherd-tabs/${w.maximized ? "win-restore" : "win-max"}.svg`).size(16) : "□", () => run("window.maximize")))
         .child(button("close-window", w.platform === "windows" ? svg("mods/lumiherd-tabs/win-close.svg").size(16) : svg("mods/pane/close.svg").size(13), () => run("window.close"))));
