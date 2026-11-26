@@ -275,7 +275,8 @@ export default class Usage extends View {
   // A party member: Imul (or a dot), name and plan as its level, then a bar a limit:
   // HP (weekly) and SP (5-hour), points left out of 100, and when it comes back.
   member(t, s, i) {
-    const stats = [...s.limits].sort((a, b) => (statName(a.label).startsWith("HP") ? 0 : 1) - (statName(b.label).startsWith("HP") ? 0 : 1));
+    // SP (the shield, 5-hour) on top, as it goes first; then HP (weekly).
+    const stats = [...s.limits].sort((a, b) => (statName(a.label).startsWith("SP") ? 0 : 1) - (statName(b.label).startsWith("SP") ? 0 : 1));
     const hp = stats.find((l) => statName(l.label).startsWith("HP"));
     const ko = hp && Math.round(100 - hp.used) <= 0;
     const tone = (n, shield) => (n <= 20 ? t.ansi1 : n <= 50 ? t.ansi3 : shield ? t.ansi4 : t.ansi2);
