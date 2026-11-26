@@ -41,8 +41,11 @@ const LINES = {
 const EVERY = 120000; // a new line this often while the state stays
 // In the game look (Options › Usage › Game style) she also watches the points: a limit
 // at 20 or less (HP the weekly one, SP the 5-hour one, KO at 0) or an agent's MP (the
-// context left) at 25 or less. While agents work or rest, every other line is that.
-const LOW = 20, LOW_MP = 25;
+// context left) at 25 or less. She says each once, for SHOW ms, when it starts (while
+// agents work or rest); not again until it has recovered and dropped again. A limit can
+// only be waited out, so it mustn't sit in her bubble. What she has said is kept
+// (localStorage "lumi.told"), so a restart doesn't repeat it.
+const LOW = 20, LOW_MP = 25, SHOW = 30000;
 const until = (at) => {
   const s = Math.max(0, at - Date.now() / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
   return h >= 24 ? `${Math.floor(h / 24)}h ${h % 24}j` : h ? `${h}j ${m}m` : `${m}m`;
@@ -53,7 +56,7 @@ function name(a) {
   const tab = a.tab_name ?? "";
   if (tab && tab !== a.program?.name && !/^(\d+|t[0-9a-z]+)$/.test(tab)) return tab;
   return agentTask(a, null) || a.space_name || "agen";
-} // a new line this often while the state stays
+}
 
 export default class LumiPet extends View {
   init(_props, cx) {
@@ -65,10 +68,13 @@ export default class LumiPet extends View {
       }
       cx.notify();
     });
+    try { this.told = JSON.parse(localStorage.getItem("lumi.told") ?? "{}") ?? {}; } catch { this.told = {}; }
+    this.warn = this.warning();
     // agents() changes on its own; this only redraws when what she shows or says does.
     cx.timer.every(1500, (cx) => {
       const s = this.state();
-      const key = JSON.stringify([s.pose, s.count, s.space, Math.floor(Date.now() / EVERY), this.warning()?.text]);
+      this.warn = this.warning();
+      const key = JSON.stringify([s.pose, s.count, s.space, Math.floor(Date.now() / EVERY), this.warn?.text]);
       if (key !== this.last) { this.last = key; cx.notify(); }
     });
   }
@@ -83,25 +89,33 @@ export default class LumiPet extends View {
     return { pose: "idle", count: 0, to: null, space: null };
   }
 
-  // What's running low, most urgent first: a KO, HP, SP, then the agent with least MP.
-  // Null when nothing is (or the game look is off).
+  // What's running low and new, most urgent first: a KO, HP, SP, then the agent with
+  // least MP. Each is shown for SHOW ms from when it started, then left alone until it
+  // recovers. Null when there's nothing to say (or the game look is off).
   warning() {
     if ((shared("sidebar.options") ?? {}).game === false) return null;
-    const out = [];
+    const now = Date.now(), out = [];
     for (const s of shared("lumiherd.usage") ?? []) {
       for (const l of s.limits ?? []) {
         const pts = 100 - l.used, hp = /^7d/.test(l.label), sp = /^5h/.test(l.label);
         if (!(hp || sp) || pts > LOW) continue;
-        if (hp && pts <= 0) out.push({ rank: 0, text: `${s.name} KO! Bangkit lagi ${l.at ? `${until(l.at)} lagi` : "nanti"}`, danger: true });
-        else if (hp) out.push({ rank: 1, text: `HP ${s.name} tinggal ${pts}, hemat-hemat ya~`, danger: true });
-        else out.push({ rank: 2, text: `Shield ${s.name} tinggal ${pts}, rehat dulu ${l.at ? until(l.at) : "sebentar"}?`, danger: false });
+        if (hp && pts <= 0) out.push({ key: `ko:${s.key}`, rank: 0, text: `${s.name} KO! Bangkit lagi ${l.at ? `${until(l.at)} lagi` : "nanti"}`, danger: true });
+        else if (hp) out.push({ key: `hp:${s.key}`, rank: 1, text: `HP ${s.name} tinggal ${pts}, hemat-hemat ya~`, danger: true });
+        else out.push({ key: `sp:${s.key}`, rank: 2, text: `Shield ${s.name} tinggal ${pts}, rehat dulu ${l.at ? until(l.at) : "sebentar"}?`, danger: false });
       }
     }
     const ctx = shared("lumiherd.contexts") ?? {};
-    const low = (agents() ?? []).map((a) => ({ a, mp: ctx[a.address] != null ? 100 - ctx[a.address] : null }))
-      .filter((x) => x.mp != null && x.mp <= LOW_MP).sort((x, y) => x.mp - y.mp)[0];
-    if (low) out.push({ rank: 3, text: `MP ${name(low.a)} tinggal ${low.mp}, mau di-heal?`, danger: low.mp <= 10, to: low.a.address });
-    return out.sort((x, y) => x.rank - y.rank)[0] ?? null;
+    for (const a of agents() ?? []) {
+      const mp = ctx[a.address] != null ? 100 - ctx[a.address] : null;
+      if (mp != null && mp <= LOW_MP) out.push({ key: `mp:${a.address}`, rank: 3, mp, text: `MP ${name(a)} tinggal ${mp}, mau di-heal?`, danger: mp <= 10, to: a.address });
+    }
+    // When each started; one that's gone (recovered) is forgotten, so it can come again.
+    const live = new Set(out.map((w) => w.key));
+    let changed = false;
+    for (const k of Object.keys(this.told ?? {})) if (!live.has(k)) { delete this.told[k]; changed = true; }
+    for (const w of out) if (!(w.key in this.told)) { this.told[w.key] = now; changed = true; }
+    if (changed) { try { localStorage.setItem("lumi.told", JSON.stringify(this.told)); } catch {} }
+    return out.filter((w) => now - this.told[w.key] < SHOW).sort((x, y) => x.rank - y.rank || (x.mp ?? 0) - (y.mp ?? 0))[0] ?? null;
   }
 
   line({ pose, count, space }) {
@@ -117,7 +131,7 @@ export default class LumiPet extends View {
     const color = s.pose === "blocked" ? t.blocked : s.pose === "working" ? t.working : s.pose === "done" ? t.done ?? t.ansi2 : t.dim;
     const file = `mods/lumi-pet/${s.pose}.${this.animated?.has(s.pose) ? "webp" : "png"}`;
     // While nobody needs you and nothing just finished, every other line is a warning.
-    const warn = (s.pose === "working" || s.pose === "idle") && Math.floor(Date.now() / EVERY) % 2 === 0 ? this.warning() : null;
+    const warn = s.pose === "working" || s.pose === "idle" ? this.warn : null;
     const said = warn ? warn.text : this.line(s), to = warn?.to ?? s.to;
     // The bubble: rounded, its corner toward Lumi kept small, with a dot trailing to her.
     // It shrinks with a narrow sidebar (the words wrap) instead of running off its edge.
