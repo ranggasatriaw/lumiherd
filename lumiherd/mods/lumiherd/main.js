@@ -1006,7 +1006,17 @@ export default class Spaces extends View {
     const pct = Math.round(i.context ?? 0);
     return h_flex().min_w(0).h(15).gap(8).items_center().text_size(11).line_height("15px").text_color(t.dim)
       .when(Boolean(o.context), (el) => el.child(this.mp(100 - pct, t, terminal, 10)))
-      .when(Boolean(o.cache && i.cold), (el) => el.child(this.expChip(i, t, terminal, name)));
+      .when(Boolean(o.cache && i.cold), (el) => el.child(this.expChip(i, t, terminal, name)))
+      // While the prompt cache is warm: how long it has left (the minute timer moves it).
+      .when(Boolean(o.cache && !i.cold && i.cacheUntil), (el) => el.child(this.cacheLeft(i, t, terminal)));
+  }
+
+  // "cache 42m": the prompt cache's time left, amber in its last 5 minutes.
+  cacheLeft(i, t, terminal) {
+    const m = Math.max(1, Math.floor((i.cacheUntil - Date.now() / 1000) / 60));
+    return div().id(`cache-${terminal}`).text_color(m <= 5 ? t.ansi3 : t.dim)
+      .tooltip("Prompt cache left: a message before then reads the chat cheaply; after it, the whole chat again")
+      .child(`cache ${m}m`);
   }
 
   // "exp.": the prompt cache ran out; a click starts fresh from a recap.
@@ -1201,7 +1211,7 @@ export default class Spaces extends View {
       // Its plan-progress task now, on a third line (expanded rows only).
       const task = a && two && opt.agentTask !== false ? this.taskOf(a) : null;
       // The game look's own line for MP and "exp." (expanded rows with details).
-      const stat = Boolean(a && two && info && opt.game !== false && (opt.context || (opt.cache && info.cold)));
+      const stat = Boolean(a && two && info && opt.game !== false && (opt.context || (opt.cache && (info.cold || info.cacheUntil))));
       const row = lit(h_flex().id(`term-${p.terminal}`), this.hoverLink?.source === p.terminal && this.hoverLink).h(two ? 46 + (stat ? 17 : 0) + (task ? 18 : 0) : 26).flex_none().pl(4 + indent).pr(8).gap(two ? 10 : 8).items_center().rounded(two ? 8 : 7)
         .when(Boolean(two), (el) => el.my(2))
         .when(space.active && p.focused && !picked, (el) => el.bg(t.hover))
