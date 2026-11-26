@@ -12,7 +12,7 @@
 
 import { View, div, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { theme, agents, run, exec, appHome, window } from "herdr";
+import { theme, agents, run, exec, appHome, window, shared } from "herdr";
 // A copy of lumiherd's (mods can't import from each other): an agent's name from its title.
 import { agentTask } from "./agent-name.js";
 // Whether a file is there: `test -f`, or on Windows (no `test`) PowerShell's Test-Path.
@@ -38,7 +38,15 @@ const LINES = {
   },
   idle: { one: ["Sepi… aku bobo dulu ya", "Zzz… bangunin kalau butuh", "Lagi santai, belum ada kerjaan"] },
 };
-const EVERY = 120000;
+const EVERY = 120000; // a new line this often while the state stays
+// In the game look (Options › Usage › Game style) she also watches the points: a limit
+// at 20 or less (HP the weekly one, SP the 5-hour one, KO at 0) or an agent's MP (the
+// context left) at 25 or less. While agents work or rest, every other line is that.
+const LOW = 20, LOW_MP = 25;
+const until = (at) => {
+  const s = Math.max(0, at - Date.now() / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h >= 24 ? `${Math.floor(h / 24)}h ${h % 24}j` : h ? `${h}j ${m}m` : `${m}m`;
+};
 
 // The agent's name: a tab named by hand, else its session's title, else its space.
 function name(a) {
@@ -60,7 +68,7 @@ export default class LumiPet extends View {
     // agents() changes on its own; this only redraws when what she shows or says does.
     cx.timer.every(1500, (cx) => {
       const s = this.state();
-      const key = JSON.stringify([s.pose, s.count, s.space, Math.floor(Date.now() / EVERY)]);
+      const key = JSON.stringify([s.pose, s.count, s.space, Math.floor(Date.now() / EVERY), this.warning()?.text]);
       if (key !== this.last) { this.last = key; cx.notify(); }
     });
   }
@@ -75,6 +83,27 @@ export default class LumiPet extends View {
     return { pose: "idle", count: 0, to: null, space: null };
   }
 
+  // What's running low, most urgent first: a KO, HP, SP, then the agent with least MP.
+  // Null when nothing is (or the game look is off).
+  warning() {
+    if ((shared("sidebar.options") ?? {}).game === false) return null;
+    const out = [];
+    for (const s of shared("lumiherd.usage") ?? []) {
+      for (const l of s.limits ?? []) {
+        const pts = 100 - l.used, hp = /^7d/.test(l.label), sp = /^5h/.test(l.label);
+        if (!(hp || sp) || pts > LOW) continue;
+        if (hp && pts <= 0) out.push({ rank: 0, text: `${s.name} KO! Bangkit lagi ${l.at ? `${until(l.at)} lagi` : "nanti"}`, danger: true });
+        else if (hp) out.push({ rank: 1, text: `HP ${s.name} tinggal ${pts}, hemat-hemat ya~`, danger: true });
+        else out.push({ rank: 2, text: `Shield ${s.name} tinggal ${pts}, rehat dulu ${l.at ? until(l.at) : "sebentar"}?`, danger: false });
+      }
+    }
+    const ctx = shared("lumiherd.contexts") ?? {};
+    const low = (agents() ?? []).map((a) => ({ a, mp: ctx[a.address] != null ? 100 - ctx[a.address] : null }))
+      .filter((x) => x.mp != null && x.mp <= LOW_MP).sort((x, y) => x.mp - y.mp)[0];
+    if (low) out.push({ rank: 3, text: `MP ${name(low.a)} tinggal ${low.mp}, mau di-heal?`, danger: low.mp <= 10, to: low.a.address });
+    return out.sort((x, y) => x.rank - y.rank)[0] ?? null;
+  }
+
   line({ pose, count, space }) {
     const set = LINES[pose];
     const list = count > 1 && set.many ? set.many : set.one;
@@ -87,14 +116,18 @@ export default class LumiPet extends View {
     const s = this.state();
     const color = s.pose === "blocked" ? t.blocked : s.pose === "working" ? t.working : s.pose === "done" ? t.done ?? t.ansi2 : t.dim;
     const file = `mods/lumi-pet/${s.pose}.${this.animated?.has(s.pose) ? "webp" : "png"}`;
+    // While nobody needs you and nothing just finished, every other line is a warning.
+    const warn = (s.pose === "working" || s.pose === "idle") && Math.floor(Date.now() / EVERY) % 2 === 0 ? this.warning() : null;
+    const said = warn ? warn.text : this.line(s), to = warn?.to ?? s.to;
     // The bubble: rounded, its corner toward Lumi kept small, with a dot trailing to her.
     // It shrinks with a narrow sidebar (the words wrap) instead of running off its edge.
     const bubble = h_flex().w_full().min_w(0).justify_end().items_end().gap(3)
-      .child(div().min_w(0).flex_shrink(1).max_w(170).px(10).py(7).rounded(12).rounded_br(3).bg(t.background).border_1().border_color(s.pose === "blocked" ? color : t.border)
-        .text_size(11.5).line_height("15px").text_color(t.foreground).whitespace_normal().child(this.line(s)))
+      .child(div().min_w(0).flex_shrink(1).max_w(170).px(10).py(7).rounded(12).rounded_br(3).bg(t.background)
+        .border_1().border_color(warn ? (warn.danger ? t.ansi1 : t.ansi3) : s.pose === "blocked" ? color : t.border)
+        .text_size(11.5).line_height("15px").text_color(t.foreground).whitespace_normal().child(said))
       .child(div().size(5).mb(2).rounded(3).bg(t.background).border_1().border_color(t.border));
     return h_flex().id("lumi-pet").size_full().pl(10).pr(6).gap(2).items_end().justify_end()
-      .when(Boolean(s.to), (el) => el.cursor_pointer().on_click(() => run("agent.focus", { terminal: s.to })))
+      .when(Boolean(to), (el) => el.cursor_pointer().on_click(() => run("agent.focus", { terminal: to })))
       .child(v_flex().flex_1().min_w(0).pb(SIZE / 2 - 4).child(bubble))
       .child(image(file).w(SIZE).h(SIZE).flex_none());
   }

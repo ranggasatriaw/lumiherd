@@ -246,6 +246,12 @@ export default class Usage extends View {
     const at = this.local.findIndex((s) => s.key === "claude") + 1;
     this.all = [...this.local.slice(0, at), ...Object.values(this.machineRows).filter(Boolean), ...this.local.slice(at)];
     this.pick();
+    // Each service's limits for Lumi (lumi-pet): name, label, % used, seconds to reset.
+    const now = Date.now() / 1000;
+    const share = this.services.filter((s) => s.limits?.length).map((s) => ({ key: s.key, name: s.name,
+      limits: s.limits.map((l) => ({ label: l.label, used: Math.round(l.used), at: l.left != null ? Math.round(now + l.left) : null })) }));
+    const text = JSON.stringify(share.map((s) => [s.key, s.limits.map((l) => [l.label, l.used])]));
+    if (text !== this.sharedUsage) { this.sharedUsage = text; setShared("lumiherd.usage", share); }
   }
 
   // What Options says to show.

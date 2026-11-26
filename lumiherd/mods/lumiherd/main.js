@@ -817,6 +817,9 @@ export default class Spaces extends View {
         const next = JSON.stringify([info, pi, models, effort, up, plans]);
         if (next !== JSON.stringify([this.info, this.piInfo, this.models, this.serverEffort, this.serversUp, this.plans])) {
           this.info = info; this.piInfo = pi; this.models = models; this.serverEffort = effort; this.serversUp = up; this.plans = plans;
+          // Each agent's context used (%), for Lumi (lumi-pet), when it changes.
+          const ctx = Object.fromEntries(Object.entries(info).filter(([, i]) => i?.context != null).map(([k, i]) => [k, Math.round(i.context)]));
+          if (JSON.stringify(ctx) !== JSON.stringify(shared("lumiherd.contexts") ?? {})) setShared("lumiherd.contexts", ctx);
           cx.notify();
         } else if (ssh || subsChanged || Object.values(subs).some((l) => l.some((x) => Date.now() / 1000 - x.at < 70))) {
           cx.notify(); // a connection started, is still going, or ended
