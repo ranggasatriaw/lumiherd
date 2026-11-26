@@ -2,6 +2,10 @@ import { View, div, image, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 // Lumiherd's clone of the shipped workspace-chrome: the footer also has Lumiherd help & options.
 import { theme, run, props, window, shared, setShared, updates, layout, openOverlay, exec, appHome } from "herdr";
+// Whether a file is there: `test -f`, or on Windows (no `test`) PowerShell's Test-Path.
+const isFile = (path) => (window()?.platform === "windows"
+  ? exec("powershell", ["-NoProfile", "-Command", `if (Test-Path -LiteralPath '${path.replace(/'/g, "''")}') { exit 0 } else { exit 1 }`])
+  : exec("test", ["-f", path])).then((r) => r?.code === 0, () => false);
 
 // A personal brand icon, kept out of this repo: brand/lumiherd.png in the Herdr home (a square PNG).
 // Without it the brand row shows Herdr's own logo.
@@ -31,7 +35,7 @@ function toggleSidebar() {
 export default class WorkspaceChrome extends View {
   init(_props, cx) {
     this.brand = null;
-    exec("test", ["-f", `${appHome()}/${BRAND}`]).then((r) => { this.brand = r?.code === 0 ? BRAND : null; cx.notify(); }).catch(() => {});
+    isFile(`${appHome()}/${BRAND}`).then((yes) => { this.brand = yes ? BRAND : null; cx.notify(); });
   }
 
   button(id, label, action) {

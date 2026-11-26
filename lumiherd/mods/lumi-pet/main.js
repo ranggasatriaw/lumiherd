@@ -12,9 +12,13 @@
 
 import { View, div, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { theme, agents, run, exec, appHome } from "herdr";
+import { theme, agents, run, exec, appHome, window } from "herdr";
 // A copy of lumiherd's (mods can't import from each other): an agent's name from its title.
 import { agentTask } from "./agent-name.js";
+// Whether a file is there: `test -f`, or on Windows (no `test`) PowerShell's Test-Path.
+const isFile = (path) => (window()?.platform === "windows"
+  ? exec("powershell", ["-NoProfile", "-Command", `if (Test-Path -LiteralPath '${path.replace(/'/g, "''")}') { exit 0 } else { exit 1 }`])
+  : exec("test", ["-f", path])).then((r) => r?.code === 0, () => false);
 
 const SIZE = 96;
 const POSES = ["blocked", "working", "done", "idle"];
@@ -49,8 +53,7 @@ export default class LumiPet extends View {
     this.animated = new Set();
     cx.spawn(async (cx) => {
       for (const p of POSES) {
-        const r = await exec("test", ["-f", `${appHome()}/mods/lumi-pet/${p}.webp`]).catch(() => null);
-        if (r?.code === 0) this.animated.add(p);
+        if (await isFile(`${appHome()}/mods/lumi-pet/${p}.webp`)) this.animated.add(p);
       }
       cx.notify();
     });
@@ -85,13 +88,14 @@ export default class LumiPet extends View {
     const color = s.pose === "blocked" ? t.blocked : s.pose === "working" ? t.working : s.pose === "done" ? t.done ?? t.ansi2 : t.dim;
     const file = `mods/lumi-pet/${s.pose}.${this.animated?.has(s.pose) ? "webp" : "png"}`;
     // The bubble: rounded, its corner toward Lumi kept small, with a dot trailing to her.
-    const bubble = h_flex().items_end().gap(3)
-      .child(div().max_w(170).px(10).py(7).rounded(12).rounded_br(3).bg(t.background).border_1().border_color(s.pose === "blocked" ? color : t.border)
+    // It shrinks with a narrow sidebar (the words wrap) instead of running off its edge.
+    const bubble = h_flex().w_full().min_w(0).justify_end().items_end().gap(3)
+      .child(div().min_w(0).flex_shrink(1).max_w(170).px(10).py(7).rounded(12).rounded_br(3).bg(t.background).border_1().border_color(s.pose === "blocked" ? color : t.border)
         .text_size(11.5).line_height("15px").text_color(t.foreground).whitespace_normal().child(this.line(s)))
       .child(div().size(5).mb(2).rounded(3).bg(t.background).border_1().border_color(t.border));
     return h_flex().id("lumi-pet").size_full().pl(10).pr(6).gap(2).items_end().justify_end()
       .when(Boolean(s.to), (el) => el.cursor_pointer().on_click(() => run("agent.focus", { terminal: s.to })))
-      .child(v_flex().flex_1().min_w(0).pb(SIZE / 2 - 4).items_end().child(bubble))
+      .child(v_flex().flex_1().min_w(0).pb(SIZE / 2 - 4).child(bubble))
       .child(image(file).w(SIZE).h(SIZE).flex_none());
   }
 }
