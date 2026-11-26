@@ -242,7 +242,7 @@ const dotted = (parts) => parts.flatMap((el, n) => (n ? [div().px(1).child("\u00
 
 // Agent rows' layout and what they show, until lumiherd-options says otherwise
 // (shared "sidebar.options"; the same defaults as there).
-const OPTIONS = { keepUpToDate: false, agentPr: true, agentTask: true, layout: "expanded", model: true, effort: true, context: true, since: true, cache: true, github: true, dirty: true, sync: true, prs: true, stars: true, issues: true,
+const OPTIONS = { keepUpToDate: false, game: true, agentPr: true, agentTask: true, layout: "expanded", model: true, effort: true, context: true, since: true, cache: true, github: true, dirty: true, sync: true, prs: true, stars: true, issues: true,
   subModel: true, subEffort: true, subContext: true, subTime: true };
 
 // Model families with a logo of their own, a badge on the agent's icon.
@@ -995,13 +995,54 @@ export default class Spaces extends View {
     return els.length ? h_flex().flex_none().gap(5).items_center().children(els) : null;
   }
 
-  agentDetails(info, t, a, p, opt, withChip = true) {
+  agentDetails(info, t, a, p, opt, withChip = true, stats = true) {
     const chip = withChip ? this.endChips(a, p, t) : null;
-    return this.infoLine(info, t, a.address, agentTask(a, p.cwd), opt, chip);
+    return this.infoLine(info, t, a.address, agentTask(a, p.cwd), opt, chip, stats);
+  }
+
+  // Expanded rows in the game look: MP and the expired-cache chip on a line of their
+  // own under the details, so neither crowds the folder and model.
+  statLine(i, t, terminal, name, o) {
+    const pct = Math.round(i.context ?? 0);
+    return h_flex().min_w(0).h(15).gap(8).items_center().text_size(11).line_height("15px").text_color(t.dim)
+      .when(Boolean(o.context), (el) => el.child(this.mp(100 - pct, t, terminal, 10)))
+      .when(Boolean(o.cache && i.cold), (el) => el.child(this.expChip(i, t, terminal, name)))
+      // While the prompt cache is warm: how long it has left (the minute timer moves it).
+      .when(Boolean(o.cache && !i.cold && i.cacheUntil), (el) => el.child(this.cacheLeft(i, t, terminal)));
+  }
+
+  // "cache 42m": the prompt cache's time left, amber in its last 5 minutes.
+  cacheLeft(i, t, terminal) {
+    const m = Math.max(1, Math.floor((i.cacheUntil - Date.now() / 1000) / 60));
+    return div().id(`cache-${terminal}`).text_color(m <= 5 ? t.ansi3 : t.dim)
+      .tooltip("Prompt cache left: a message before then reads the chat cheaply; after it, the whole chat again")
+      .child(`cache ${m}m`);
+  }
+
+  // "exp.": the prompt cache ran out; a click starts fresh from a recap.
+  expChip(i, t, terminal, name) {
+    return div().id(`exp-${terminal}`).px(2).rounded(4).cursor_pointer().text_color(t.ansi1)
+      .hover((s) => s.bg(t.hover))
+      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+      .on_hover((on, cx) => { if (on) this.hoverExp = terminal; else if (this.hoverExp === terminal) this.hoverExp = null; cx.notify(); })
+      .on_click((_e, cx) => { cx.stop_propagation(); this.freshStart(terminal, i.transcript, name, cx); })
+      .child(this.hoverExp === terminal ? "clear + recap" : "exp.");
+  }
+
+  // MP: an agent's context left, as five cells and the points (game look).
+  mp(left, t, terminal, cells = 5) {
+    left = Math.max(0, Math.min(100, Math.round(left)));
+    const per = 100 / cells;
+    const c = left <= 20 ? t.ansi1 : left <= 50 ? t.ansi3 : t.ansi5;
+    return h_flex().id(`mp-${terminal}`).flex_none().gap(3).items_center().tooltip(`MP ${left}/100: context left (${100 - left}% used)`)
+      .child(div().text_size(9.5).font_semibold().text_color(c).child("MP"))
+      .child(h_flex().gap(1).items_center().when(left <= 20, (el) => el.loop("opacity", { from: 0.35, to: 1, period: 900 }))
+        .children(Array.from({ length: cells }, (_, k) => div().w(4).h(6).rounded(1).bg(k < Math.ceil(left / per) ? c : t.raised))))
+      .child(div().text_color(c).child(String(left)));
   }
 
   // `extra`: an element at the end of the line (an agent's subagents chip).
-  infoLine(i, t, terminal, name, o, extra = null) {
+  infoLine(i, t, terminal, name, o, extra = null, stats = true) {
     const pct = Math.round(i.context ?? 0);
     const color = pct >= 80 ? t.ansi1 : pct >= 50 ? t.ansi3 : t.ansi2;
     const parts = [
@@ -1012,19 +1053,16 @@ export default class Spaces extends View {
       o.model && i.model ? div().child(i.model) : null,
       o.effort && i.effort ? h_flex().items_center().child(i.effort === "medium" ? "med" : i.effort)
         .when(Boolean(i.ultracode), (el) => el.child(div().text_color(MARK.ansi5).child("*"))) : null,
-      // Context always shows when on: 0% before the first reply.
-      o.context ? div().text_color(color).child(`${pct}%`) : null,
+      // Context always shows when on: 0% before the first reply. In the game look it's
+      // MP, the context left: five cells and the points, red and blinking at 20 or less.
+      o.context && o.game === false ? div().text_color(color).child(`${pct}%`) : null,
+      o.context && o.game !== false && stats ? this.mp(100 - pct, t, terminal) : null,
       // How long since it last worked, while it isn't.
       o.since && i.since ? div().child(i.since) : null,
     ].filter(Boolean);
     return h_flex().flex_none().items_center().text_size(11).text_color(t.dim)
       .children(dotted(parts))
-      .when(Boolean(o.cache && i.cold), (el) => el.child(div().id(`exp-${terminal}`).ml(4).px(2).rounded(4).cursor_pointer().text_color(t.ansi1)
-        .hover((s) => s.bg(t.hover))
-        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
-        .on_hover((on, cx) => { if (on) this.hoverExp = terminal; else if (this.hoverExp === terminal) this.hoverExp = null; cx.notify(); })
-        .on_click((_e, cx) => { cx.stop_propagation(); this.freshStart(terminal, i.transcript, name, cx); })
-        .child(this.hoverExp === terminal ? "clear + recap" : "exp.")))
+      .when(Boolean(o.cache && i.cold && stats), (el) => el.child(this.expChip(i, t, terminal, name).ml(4)))
       .when(Boolean(extra), (el) => el.child(extra.ml(5)));
   }
 
@@ -1172,7 +1210,9 @@ export default class Spaces extends View {
       const sshed = this.sshedTo(p.terminal, "self");
       // Its plan-progress task now, on a third line (expanded rows only).
       const task = a && two && opt.agentTask !== false ? this.taskOf(a) : null;
-      const row = lit(h_flex().id(`term-${p.terminal}`), this.hoverLink?.source === p.terminal && this.hoverLink).h(two ? (task ? 64 : 46) : 26).flex_none().pl(4 + indent).pr(8).gap(two ? 10 : 8).items_center().rounded(two ? 8 : 7)
+      // The game look's own line for MP and "exp." (expanded rows with details).
+      const stat = Boolean(a && two && info && opt.game !== false && (opt.context || (opt.cache && (info.cold || info.cacheUntil))));
+      const row = lit(h_flex().id(`term-${p.terminal}`), this.hoverLink?.source === p.terminal && this.hoverLink).h(two ? 46 + (stat ? 17 : 0) + (task ? 18 : 0) : 26).flex_none().pl(4 + indent).pr(8).gap(two ? 10 : 8).items_center().rounded(two ? 8 : 7)
         .when(Boolean(two), (el) => el.my(2))
         .when(space.active && p.focused && !picked, (el) => el.bg(t.hover))
         .when(picked, (el) => el.bg(t.accent + "38"))
@@ -1218,9 +1258,10 @@ export default class Spaces extends View {
             // two (expanded) or with no details, here on the name's line, at its end,
             // so the line under has the whole width.
             .when(!info || two, (el) => el.when(Boolean(two), (x) => x.child(div().flex_1())).children([this.prChip(space, p, t), this.endChips(a, p, t)].filter(Boolean))))
-          .when(Boolean(two), (el) => el.overflow_hidden().child(info ? this.agentDetails(info, t, a, p, opt, false).text_size(11.5).line_height("15px")
+          .when(Boolean(two), (el) => el.overflow_hidden().child(info ? this.agentDetails(info, t, a, p, opt, false, !stat).text_size(11.5).line_height("15px")
             : h_flex().min_w(0).items_center().text_size(11.5).line_height("15px").text_color(t.dim)
               .children(dotted([div().text_color(this.tagWhere?.color ?? t.dim).child(this.tagWhere?.folder ?? ""), this.tagWhere?.machine && div().child(this.tagWhere.machine)].filter(Boolean)))))
+          .when(stat, (el) => el.child(this.statLine(info, t, a.address, agentTask(a, p.cwd), opt)))
           .when(Boolean(task), (el) => el.child(this.taskLine(task, p, t))))
         .when(Boolean(info) && !two, (el) => el.child(this.agentDetails(info, t, a, p, opt)));
       // Its sub-agents nested under it (subRows), unless folded.

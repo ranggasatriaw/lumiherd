@@ -29,7 +29,7 @@
 // (accountUuid in ~/.claude.json), as a computer's sessions each save their own (further()). Lumiherd's Options › Usage (shared "sidebar.options": usage,
 // usageClaude, usageCodex, usageGemini, usageZai) hides the section or a service.
 
-import { View, div, svg } from "gpui-kit";
+import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { theme, exec, home, appHome, run, shared, setShared, layout, notify, readTextFile, machines } from "herdr";
 
@@ -41,6 +41,13 @@ function inLayout() {
   return Boolean(find(layout()));
 }
 const ROW = 28, LIMIT = 20, TABS = 26, GRAPH = 72;
+// The game look (Options › Usage › Game style): each service is a party member, Imul
+// in its helmet colour, with its limits as points left: HP the weekly one, SP (shield)
+// the 5-hour one. A bar of 10 cells; red and blinking at 20 or less; at 0 HP, KO
+// until it respawns (the reset).
+const IMUL = { claude: "imul/claude.png", codex: "imul/codex.png", zai: "imul/omp.png" };
+const MEMBER = 26, STAT = 18;
+const statName = (label) => label.replace(/^7d/, "HP").replace(/^5h/, "SP");
 
 const CODEX = `f=$(ls -t "$HOME"/.codex/sessions/*/*/*/*.jsonl 2>/dev/null | head -n 1); [ -n "$f" ] || exit 0
 grep -o '"rate_limits":{.*' "$f" | tail -n 1 | sed 's/^"rate_limits"://' | jq -c '{plan: .plan_type, primary, secondary}' 2>/dev/null`;
@@ -246,13 +253,15 @@ export default class Usage extends View {
     const o = shared("sidebar.options") ?? {};
     const want = { claude: o.usageClaude !== false, codex: o.usageCodex !== false, gemini: o.usageGemini !== false, zai: o.usageZai !== false };
     this.services = o.usage === false ? [] : (this.all ?? []).filter((s) => want[s.service ?? s.key] !== false);
+    this.game = o.game !== false;
     this.fit();
   }
 
   // The block's height: every row, plus the open ones' limits.
   fit() {
     if (!inLayout()) return;
-    const h = this.services.length ? 6 + this.services.reduce((n, s) => n + ROW + (this.open.has(s.key) ? (s.days ? TABS + GRAPH + Math.max(1, spendIn(s.days, this.period(s).days).models.length) * LIMIT : Math.max(1, s.limits?.length ?? 0) * LIMIT) + 4 : 0), 0) : 0;
+    const member = (s) => this.game && s.limits?.length && !s.days;
+    const h = this.services.length ? 6 + this.services.reduce((n, s) => member(s) ? n + MEMBER + s.limits.length * STAT + 6 : n + ROW + (this.open.has(s.key) ? (s.days ? TABS + GRAPH + Math.max(1, spendIn(s.days, this.period(s).days).models.length) * LIMIT : Math.max(1, s.limits?.length ?? 0) * LIMIT) + 4 : 0), 0) : 0;
     if (h !== this.height) { this.height = h; run("layout.resize", { id: BLOCK, px: h }); }
   }
 
@@ -261,6 +270,40 @@ export default class Usage extends View {
     setShared("lumiherd.usageOpen", [...this.open]);
     this.fit();
     cx.notify();
+  }
+
+  // A party member: Imul (or a dot), name and plan as its level, then a bar a limit:
+  // HP (weekly) and SP (5-hour), points left out of 100, and when it comes back.
+  member(t, s, i) {
+    // SP (the shield, 5-hour) on top, as it goes first; then HP (weekly).
+    const stats = [...s.limits].sort((a, b) => (statName(a.label).startsWith("SP") ? 0 : 1) - (statName(b.label).startsWith("SP") ? 0 : 1));
+    const hp = stats.find((l) => statName(l.label).startsWith("HP"));
+    const ko = hp && Math.round(100 - hp.used) <= 0;
+    const tone = (n, shield) => (n <= 20 ? t.ansi1 : n <= 50 ? t.ansi3 : shield ? t.ansi4 : t.ansi2);
+    return v_flex().w_full().pb(6)
+      .when(i > 0, (el) => el.border_t(1).border_color(t.border))
+      .child(h_flex().h(MEMBER).px(2).gap(6).items_center()
+        .child(IMUL[s.key] ? image(IMUL[s.key]).w(18).h(18).flex_none().when(ko, (x) => x.opacity(0.35))
+          : div().size(8).mx(5).rounded(4).flex_none().bg(t.dim))
+        .child(div().min_w(0).truncate().text_color(ko ? t.dim : t.muted).child(s.name))
+        .when(Boolean(s.plan), (el) => el.child(div().flex_shrink_0().px(5).py(1).rounded(4).bg(t.raised).text_size(10.5).text_color(t.accent).child(`Lv. ${s.plan}`)))
+        .child(div().flex_1())
+        .when(ko, (el) => el.child(div().flex_none().px(5).py(1).rounded(4).bg(t.ansi1).text_size(10.5).font_semibold().text_color(t.background).child("KO"))))
+      .children(stats.map((l) => {
+        const pts = Math.max(0, Math.round(100 - l.used)), name = statName(l.label), shield = name.startsWith("SP");
+        const c = tone(pts, shield), cells = Math.ceil(pts / 10);
+        const bar = h_flex().flex_1().h(7).gap(1.5)
+          .children(Array.from({ length: 10 }, (_, k) => div().flex_1().h_full().rounded(1).bg(k < cells ? c : t.raised)))
+          .when(pts > 0 && pts <= 20, (el) => el.loop("opacity", { from: 0.35, to: 1, period: 900 }));
+        return h_flex().id(`stat-${s.key}-${l.label}`).h(STAT).px(2).gap(6).items_center().text_size(11)
+          .tooltip(`${name} ${pts}/100 (${l.label} limit, ${Math.round(l.used)}% used)${l.left != null ? `. Back in ${left(l.left)}` : ""}`)
+          .child(div().w(20).flex_none().font_semibold().text_color(c).child(name.slice(0, 2)))
+          .child(div().w(20).flex_none().text_size(10).text_color(t.dim).child(l.label))
+          .child(bar)
+          .child(div().w(24).flex_none().flex().justify_end().font_semibold().text_color(c).child(String(pts)))
+          .child(div().w(40).flex_none().flex().justify_end().text_size(10).text_color(t.dim)
+            .child(l.left == null ? "" : pts === 0 ? `↻ ${left(l.left)}` : left(l.left)));
+      }));
   }
 
   // The limit a service's row shows: the one picked for it, or else its fullest.
@@ -353,6 +396,7 @@ export default class Usage extends View {
         // A model keeps its colour across the tabs: by its rank over all of them.
         const palette = [t.accent, t.ansi3, t.ansi5, t.ansi6, t.ansi2, t.ansi1];
         const color = (name) => palette[Math.max(0, spendIn(s.days, 30).models.findIndex((x) => x.name === name)) % palette.length];
+        if (this.game && s.limits?.length && !s.days) return this.member(t, s, i);
         const shown = s.days?.slice(-p.days) ?? [];
         const most = Math.max(...shown.map((d) => spendIn([d], 1).total), 0);
         return v_flex().w_full()

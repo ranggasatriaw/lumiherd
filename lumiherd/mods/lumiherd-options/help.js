@@ -191,7 +191,7 @@ export function helpTopics(view, t) {
           line(dot(t.blocked), "Needs you"),
           line(dot(done), "Done"),
           line(spinner(), "Working"),
-          line(small("42%"), "Context used"),
+          line(small("MP 58"), "Context left (game style; 42% used). Blinks at 20 or less"),
           line(small("2m"), "Since its last reply"),
           line(key("Double-click"), "Rename"),
         ]),
@@ -287,7 +287,8 @@ export function helpTopics(view, t) {
           line(pct(9), "Under 50%"), line(pct(52), "From 50%"), line(pct(81), "From 80%"),
           line(key("Click"), "Every limit, and when each resets"),
           note("Claude's and Gemini's need their session footer (next page); Z.ai's asks z.ai with your key"),
-          note("Pick which show in Options › Usage"),
+          note("Game style (on by default): each service is Imul with HP, the weekly limit left, and SP (shield), the 5-hour one. Red and blinking at 20 or less; at 0 HP it's KO until it comes back"),
+          note("Pick which show, or the plain bars, in Options › Usage"),
         ]),
       topic("Session footers",
         frame(
