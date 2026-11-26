@@ -242,7 +242,7 @@ const dotted = (parts) => parts.flatMap((el, n) => (n ? [div().px(1).child("\u00
 
 // Agent rows' layout and what they show, until lumiherd-options says otherwise
 // (shared "sidebar.options"; the same defaults as there).
-const OPTIONS = { keepUpToDate: false, agentPr: true, agentTask: true, layout: "expanded", model: true, effort: true, context: true, since: true, cache: true, github: true, dirty: true, sync: true, prs: true, stars: true, issues: true,
+const OPTIONS = { keepUpToDate: false, game: true, agentPr: true, agentTask: true, layout: "expanded", model: true, effort: true, context: true, since: true, cache: true, github: true, dirty: true, sync: true, prs: true, stars: true, issues: true,
   subModel: true, subEffort: true, subContext: true, subTime: true };
 
 // Model families with a logo of their own, a badge on the agent's icon.
@@ -1000,6 +1000,17 @@ export default class Spaces extends View {
     return this.infoLine(info, t, a.address, agentTask(a, p.cwd), opt, chip);
   }
 
+  // MP: an agent's context left, as five cells and the points (game look).
+  mp(left, t, terminal) {
+    left = Math.max(0, Math.min(100, Math.round(left)));
+    const c = left <= 20 ? t.ansi1 : left <= 50 ? t.ansi3 : t.ansi5;
+    return h_flex().id(`mp-${terminal}`).flex_none().gap(3).items_center().tooltip(`MP ${left}/100: context left (${100 - left}% used)`)
+      .child(div().text_size(9.5).font_semibold().text_color(c).child("MP"))
+      .child(h_flex().gap(1).items_center().when(left <= 20, (el) => el.loop("opacity", { from: 0.35, to: 1, period: 900 }))
+        .children(Array.from({ length: 5 }, (_, k) => div().w(4).h(6).rounded(1).bg(k < Math.ceil(left / 20) ? c : t.raised))))
+      .child(div().text_color(c).child(String(left)));
+  }
+
   // `extra`: an element at the end of the line (an agent's subagents chip).
   infoLine(i, t, terminal, name, o, extra = null) {
     const pct = Math.round(i.context ?? 0);
@@ -1012,8 +1023,10 @@ export default class Spaces extends View {
       o.model && i.model ? div().child(i.model) : null,
       o.effort && i.effort ? h_flex().items_center().child(i.effort === "medium" ? "med" : i.effort)
         .when(Boolean(i.ultracode), (el) => el.child(div().text_color(MARK.ansi5).child("*"))) : null,
-      // Context always shows when on: 0% before the first reply.
-      o.context ? div().text_color(color).child(`${pct}%`) : null,
+      // Context always shows when on: 0% before the first reply. In the game look it's
+      // MP, the context left: five cells and the points, red and blinking at 20 or less.
+      o.context && o.game === false ? div().text_color(color).child(`${pct}%`) : null,
+      o.context && o.game !== false ? this.mp(100 - pct, t, terminal) : null,
       // How long since it last worked, while it isn't.
       o.since && i.since ? div().child(i.since) : null,
     ].filter(Boolean);

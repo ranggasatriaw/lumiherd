@@ -13,7 +13,7 @@ import { props, closeOverlay, openOverlay, run, theme, shared, setShared, home, 
 
 export const DEFAULTS = { keepUpToDate: false, handoffRule: false, timeline: true, tasks: true, panelShell: true, pet: true, agentPr: true, agentTask: true, claudeStatus: false, agyStatus: false, layout: "expanded", model: true, effort: true, context: true, since: true, cache: true, github: true, dirty: true, sync: true, prs: true, stars: true, issues: true,
   subModel: true, subEffort: true, subContext: true, subTime: true,
-  usage: true, usageClaude: true, usageCodex: true, usageGemini: true, usageZai: true };
+  usage: true, game: true, usageClaude: true, usageCodex: true, usageGemini: true, usageZai: true };
 // What sits around the work (the right panel's tabs, the small shell, Lumi): each
 // [key, label, note]; the shell and Lumi are layout blocks, shown or hidden as switched.
 const PANEL_ITEMS = [
@@ -51,6 +51,7 @@ const PAGES = [["folders", "Folders"], ["spaces", "Space rows"], ["agents", "Age
 // The usage section above Settings (lumiherd-usage): whether it shows, and which services.
 const USAGE_ITEMS = [
   ["usage", "Show usage", "Limits per service, above Settings"],
+  ["game", "Game style", "Each service as Imul with HP (weekly) and SP (5-hour) left; agent rows show MP, the context left"],
   ["usageClaude", "Claude", "Needs Claude Code's session footer."],
   ["usageCodex", "Codex", "From Codex's latest session"],
   ["usageGemini", "Gemini", "Includes 3rd-party (Claude, GPT) limits. Needs Antigravity's session footer."],
