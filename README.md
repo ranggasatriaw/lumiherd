@@ -15,6 +15,13 @@ it's built: [lumiherd/RECIPE.md](lumiherd/RECIPE.md).
 herdr-app do layout.switch '{"name":"lumiherd"}'
 ```
 
+On Windows (no rsync), from PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File pasang.ps1
+herdr-app do layout.switch '{"name":"lumiherd"}'
+```
+
 `pasang.sh` copies `lumiherd/layouts` and `lumiherd/mods` into `~/.config/herdr-app`
 and runs `herdr-app check` on each mod. Its keys (`lumiherd/keys.macos.json`) are
 not merged automatically.
