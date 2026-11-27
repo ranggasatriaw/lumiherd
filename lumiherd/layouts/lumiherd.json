@@ -170,6 +170,13 @@
                       "content": {
                         "mod": "lumiherd-tasks"
                       }
+                    },
+                    {
+                      "id": "servers",
+                      "type": "block",
+                      "content": {
+                        "mod": "lumiherd-servers"
+                      }
                     }
                   ],
                   "active": "files",

@@ -11,7 +11,7 @@ import { FolderPick } from "./folder-pick.js";
 import { helpTopics } from "./help.js";
 import { props, closeOverlay, openOverlay, run, theme, shared, setShared, home, appHome, pickFolder, exec, machines, readTextFile, notify } from "herdr";
 
-export const DEFAULTS = { keepUpToDate: false, handoffRule: false, timeline: true, tasks: true, panelShell: true, pet: true, agentPr: true, agentTask: true, claudeStatus: false, agyStatus: false, layout: "expanded", model: true, effort: true, context: true, since: true, cache: true, github: true, dirty: true, sync: true, prs: true, stars: true, issues: true,
+export const DEFAULTS = { keepUpToDate: false, handoffRule: false, timeline: true, tasks: true, servers: true, panelShell: true, pet: true, agentPr: true, agentTask: true, claudeStatus: false, agyStatus: false, layout: "expanded", model: true, effort: true, context: true, since: true, cache: true, github: true, dirty: true, sync: true, prs: true, stars: true, issues: true,
   subModel: true, subEffort: true, subContext: true, subTime: true,
   usage: true, game: true, usageClaude: true, usageCodex: true, usageGemini: true, usageZai: true };
 // What sits around the work (the right panel's tabs, the small shell, Lumi): each
@@ -19,6 +19,7 @@ export const DEFAULTS = { keepUpToDate: false, handoffRule: false, timeline: tru
 const PANEL_ITEMS = [
   ["tasks", "Tasks", "The agent's tasks as a list (from Claude Code's plan-progress plugin). Off: the button and panel hidden"],
   ["timeline", "Timeline", "Your prompts in the agent you're in. Off: the button and panel hidden"],
+  ["servers", "Servers", "What's listening on this computer: dev servers with their ports (click to open) and Stop"],
   ["panelShell", "Small shell", "A shell under the right panel, the same whichever tab is open"],
   ["pet", "Lumi", "Lumi above Usage: her pose and bubble follow the agents; a click goes to the one she means"],
 ];

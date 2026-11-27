@@ -92,6 +92,8 @@ export default class Tabs extends View {
     const enabled = shared("workspace.panels") ?? ["files", "changes"];
     // Options › Panels & Lumi: Tasks off hides its button, and the panel if it shows it.
     const tasksOn = (shared("sidebar.options") ?? {}).tasks !== false;
+    const serversOn = (shared("sidebar.options") ?? {}).servers !== false;
+    if (!serversOn && panel && !panel.hidden && body?.active === "servers") run("layout.hide", { id: "panel" });
     if (!tasksOn && panel && !panel.hidden && body?.active === "tasks") run("layout.hide", { id: "panel" });
     const timelineOn = (shared("sidebar.options") ?? {}).timeline !== false;
     if (!timelineOn && panel && !panel.hidden && body?.active === "prompts") run("layout.hide", { id: "panel" });
@@ -131,6 +133,8 @@ export default class Tabs extends View {
       .when(timelineOn, el => el.child(panelButton("prompts", "Timeline", "mods/lumiherd-prompts/timeline.svg")))
       // The agent's plan-progress tasks as a list (lumiherd-tasks).
       .when(tasksOn, el => el.child(panelButton("tasks", "Tasks", "mods/workspace-chrome/circle-check.svg")))
+      // What's listening on this computer (lumiherd-servers).
+      .when(serversOn, el => el.child(panelButton("servers", "Servers", "mods/workspace-chrome/server.svg")))
       .when(w?.buttons, el => el.child(button("minimize", w.platform === "windows" ? svg("mods/lumiherd-tabs/win-min.svg").size(16) : "−", () => run("window.minimize")))
         .child(button("maximize", w.platform === "windows" ? svg(`mods/lumiherd-tabs/${w.maximized ? "win-restore" : "win-max"}.svg`).size(16) : "□", () => run("window.maximize")))
         .child(button("close-window", w.platform === "windows" ? svg("mods/lumiherd-tabs/win-close.svg").size(16) : svg("mods/pane/close.svg").size(13), () => run("window.close"))));
