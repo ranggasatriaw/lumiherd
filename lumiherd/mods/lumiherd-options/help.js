@@ -265,6 +265,15 @@ export function helpTopics(view, t) {
           line(key("PRs"), "The branch's pull request: checks, reviews, merge (Branch PR)"),
           note("Each is its own mod, installed apart: see the README"),
         ]),
+      topic("Servers",
+        frame(v_flex().gap(4).px(8).py(6).rounded(8).bg(t.background).border_1().border_color(t.border).text_size(12)
+          .child(h_flex().gap(8).items_center().child(dot(t.ansi2)).child(div().font_semibold().child("node")).child(div().flex_1().text_size(11).text_color(t.dim).child("~/Code/my-app"))
+            .child(h_flex().h(20).px(7).items_center().rounded(5).border_1().border_color(t.border).text_size(11).text_color(t.muted).child("Stop")))
+          .child(h_flex().gap(4).pl(15).child(h_flex().h(18).px(6).items_center().rounded(4).bg(t.raised).text_size(11).text_color(t.accent).child(":5173")))), [
+          note("What's listening on this computer: dev servers first, the rest folded under \"other\""),
+          line(small(":5173"), "Open it in the browser"),
+          line(key("Stop"), "Click twice to stop a dev server you started (not Docker or databases)"),
+        ]),
       topic("Small shell",
         frame(h_flex().h(54).px(10).items_center().rounded(8).bg(t.background).border_1().border_color(t.border).text_size(12)
           .child(div().text_color(t.ansi2).child("❯")).child(div().pl(6).text_color(t.muted).child("git status"))), [
@@ -313,6 +322,13 @@ export function helpTopics(view, t) {
           line(small("sleeps"), "All idle"),
           line(key("Click"), "Go to the agent she means"),
           note("Hide her in Options › Panels & Lumi"),
+        ]),
+      topic("Privacy",
+        frame(
+          agent("Agen SP", { status: spinner(), two: true, info: [div().text_color(BLUE).child("~/\u2026/Proyek AT"), ...facts("Opus 5.5", "med")] })), [
+          line(svg("mods/lumiherd-footer/eye.svg").size(13).text_color(t.foreground), "The eye by the search, for screen shares: names become steady aliases"),
+          note("Projects and folders, agents, tasks and subagents' words, tab names and Lumi's bubble. Timeline and Tasks hide what's in them"),
+          note("Not the terminals themselves, nor Files, Changes and PRs (other mods): close what shows a name you'd rather not share"),
         ]),
       topic("Select several",
         side(

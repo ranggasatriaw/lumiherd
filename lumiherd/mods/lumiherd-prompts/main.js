@@ -14,7 +14,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, TextView } from "gpui-base";
-import { theme, exec, home, appHome, focused, agents, panes, readTextFile, hc } from "herdr";
+import { theme, exec, home, appHome, focused, agents, panes, readTextFile, hc, shared } from "herdr";
 
 // Python 3 runs as "python3", else "python" (as on Windows): found once.
 let PY = null;
@@ -216,11 +216,12 @@ export default class Prompts extends View {
           .child([`↓ ${count(all.reduce((n, p, i) => n + (i === 0 && working && this.live ? this.live.tokens : p.tokens || 0), 0))}`,
             this.context ? `context ${count(this.context)}` : ""].filter(Boolean).join(" · ")))))
       .when(Boolean(this.note), (el) => el.child(div().px(14).py(10).text_size(12).text_color(t.dim).child(this.note)))
-      .child(v_flex().id("prompts-scroll").flex_1().min_h(0).overflow_y_scrollbar().pl(8).pr(8).pt(6).pb(8)
+      .when(Boolean(shared("lumiherd.private")), (el) => el.child(div().px(14).py(10).text_size(12).text_color(t.dim).child("Hidden: privacy is on (the eye in the sidebar)")))
+      .when(!shared("lumiherd.private"), (el) => el.child(v_flex().id("prompts-scroll").flex_1().min_h(0).overflow_y_scrollbar().pl(8).pr(8).pt(6).pb(8)
         .children(list.map(item))
         .when(all.length > list.length, (el) => el.child(div().id("prompts-older").mx(22).my(6).px(10).py(6).rounded(6).cursor_pointer()
           .border_1().border_color(t.border).text_size(12).text_color(t.muted).hover((x) => x.bg(t.hover))
           .on_click((_e, cx) => { this.shown = list.length + SHOWN; cx.notify(); })
-          .child(`Show older (${all.length - list.length} more)`))));
+          .child(`Show older (${all.length - list.length} more)`)))));
   }
 }

@@ -11,7 +11,7 @@
 
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { theme, exec, home, focused, agents, readTextFile } from "herdr";
+import { theme, exec, home, focused, agents, readTextFile, shared } from "herdr";
 
 const STORE = `cat "$HOME"/.claude/plugins/store/plan-progress_*.json 2>/dev/null | head -c 4000000`;
 const STATE = { running: "Working", needs_input: "Needs you", error: "Error", done: "Done" };
@@ -106,6 +106,7 @@ export default class Tasks extends View {
           .child(String(list.length))))
         .child(div().flex_1().min_w(0).truncate().text_right().text_size(12).text_color(t.dim).child(this.name())))
       .when(Boolean(this.note), (el) => el.child(div().px(14).py(10).text_size(12).text_color(t.dim).child(this.note)))
-      .child(v_flex().id("tasks-scroll").flex_1().min_h(0).overflow_y_scrollbar().p(10).gap(10).children(list.map(card)));
+      .when(Boolean(shared("lumiherd.private")), (el) => el.child(div().px(14).py(10).text_size(12).text_color(t.dim).child("Hidden: privacy is on (the eye in the sidebar)")))
+      .when(!shared("lumiherd.private"), (el) => el.child(v_flex().id("tasks-scroll").flex_1().min_h(0).overflow_y_scrollbar().p(10).gap(10).children(list.map(card))));
   }
 }
