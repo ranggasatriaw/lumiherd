@@ -95,6 +95,20 @@ const MARKED = `{ for d in "$@"; do case "$d" in "~") d=$HOME ;; "~/"*) d="$HOME
   find "$HOME" -maxdepth 3 \\( -path "$HOME/.*" -o -name node_modules \\) -prune -o \\
     \\( -name CLAUDE.md -o -name CLAUDE.local.md -o -name AGENTS.md -o \\( -name .claude -type d \\) \\) -print 2>/dev/null
 } | sed 's#/[^/]*$##' | sort -u`;
+// Privacy (shared "lumiherd.private", the eye in the brand row): names that would tell
+// a screen share what you work on are swapped for steady aliases ("Proyek KQ", "Agen
+// MB"), what agents do for dots. The same name always gets the same alias.
+const isPrivate = () => Boolean(shared("lumiherd.private"));
+function alias(text, kind) {
+  let h = 0;
+  for (const c of String(text ?? "")) h = (h * 31 + c.codePointAt(0)) >>> 0;
+  const A = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  return `${kind} ${A[h % A.length]}${A[Math.floor(h / A.length) % A.length]}`;
+}
+const hide = (text, kind) => (!isPrivate() || text == null || text === "" ? text : kind === "text" ? "\u2022\u2022\u2022\u2022\u2022" : alias(text, kind === "agent" ? "Agen" : "Proyek"));
+// A path: home and the alias of its last folder ("~/…/Proyek KQ").
+const hidePath = (p) => (!isPrivate() || !p ? p : p === "~" ? p : `~/\u2026/${alias(String(p).replace(/\/+$/, "").split("/").pop(), "Proyek")}`);
+
 // A pull request's checks in one word: "fail" if any failed, else "pending" while any
 // runs, else "pass"; null without checks. Check runs have a conclusion, statuses a state.
 function ciState(checks) {
@@ -605,8 +619,8 @@ export default class Spaces extends View {
         .when(Boolean(click), (el) => el.on_click(click))
         .child(h_flex().flex_none().gap(4).items_center().child(div().w(16).flex_none()).child(icon))
         .child(h_flex().flex_1().min_w(0).gap(6).items_center()
-          .child(div().min_w(0).truncate().text_size(12.5).text_color(t.muted).child(name))
-          .when(Boolean(folder), (el) => el.child(div().flex_shrink(0).max_w(170).truncate().text_size(11).text_color(t.dim).child(folder))))
+          .child(div().min_w(0).truncate().text_size(12.5).text_color(t.muted).child(hide(name, "agent")))
+          .when(Boolean(folder), (el) => el.child(div().flex_shrink(0).max_w(170).truncate().text_size(11).text_color(t.dim).child(hidePath(folder)))))
         .child(linkChip(t, `via-chip-${address}`, { dir: "in", icon: kind, color: c }));
     };
     return [
@@ -957,7 +971,7 @@ export default class Spaces extends View {
         run("layout.show", { id: "panel" });
       })
       .child(div().size(6).rounded(3).flex_none().bg(c))
-      .child(div().flex_1().min_w(0).truncate().text_color(t.muted).child(task.step ?? task.title))
+      .child(div().flex_1().min_w(0).truncate().text_color(t.muted).child(hide(task.step ?? task.title, "text")))
       .child(div().w(34).h(3).flex_none().rounded(2).bg(t.border).overflow_hidden().child(div().h_full().rounded(2).bg(c).w(`${pct}%`)))
       .child(div().flex_none().text_size(10.5).text_color(t.dim).child(`${task.done}/${task.total}`));
   }
@@ -1066,7 +1080,7 @@ export default class Spaces extends View {
     const parts = [
       // Listed by state (agentSections): where it is first: its folder, in its
       // space's colour, and the computer when it's another.
-      this.tagWhere ? div().text_color(this.tagWhere.color ?? t.dim).child(this.tagWhere.folder) : null,
+      this.tagWhere ? div().text_color(this.tagWhere.color ?? t.dim).child(hidePath(this.tagWhere.folder)) : null,
       this.tagWhere?.machine ? div().child(this.tagWhere.machine) : null,
       o.model && i.model ? div().child(i.model) : null,
       o.effort && i.effort ? h_flex().items_center().child(i.effort === "medium" ? "med" : i.effort)
@@ -1271,14 +1285,14 @@ export default class Spaces extends View {
           .child(h_flex().min_w(0).gap(6).items_center()
             .child(div().min_w(0).truncate().text_size(two ? 13.5 : 12.5).text_color(idle ? t.muted : t.foreground)
               .when(Boolean(two), (el) => el.line_height("17px"))
-              .child(a ? agentName(a, tab, p.cwd) : this.termName(p, tab, key)))
+              .child(hide(a ? agentName(a, tab, p.cwd) : this.termName(p, tab, key), "agent")))
             // Its link and count chips: after its details (infoLine) on one line; on
             // two (expanded) or with no details, here on the name's line, at its end,
             // so the line under has the whole width.
             .when(!info || two, (el) => el.when(Boolean(two), (x) => x.child(div().flex_1())).children([this.prChip(space, p, t), this.endChips(a, p, t)].filter(Boolean))))
           .when(Boolean(two), (el) => el.overflow_hidden().child(info ? this.agentDetails(info, t, a, p, opt, false, !stat).text_size(11.5).line_height("15px")
             : h_flex().min_w(0).items_center().text_size(11.5).line_height("15px").text_color(t.dim)
-              .children(dotted([div().text_color(this.tagWhere?.color ?? t.dim).child(this.tagWhere?.folder ?? ""), this.tagWhere?.machine && div().child(this.tagWhere.machine)].filter(Boolean)))))
+              .children(dotted([div().text_color(this.tagWhere?.color ?? t.dim).child(hidePath(this.tagWhere?.folder ?? "")), this.tagWhere?.machine && div().child(this.tagWhere.machine)].filter(Boolean)))))
           .when(stat, (el) => el.child(this.statLine(info, t, a.address, agentTask(a, p.cwd), opt)))
           .when(Boolean(task), (el) => el.child(this.taskLine(task, p, t))))
         .when(Boolean(info) && !two, (el) => el.child(this.agentDetails(info, t, a, p, opt)));
@@ -1713,7 +1727,7 @@ export default class Spaces extends View {
         .child(status(id, () => run("terminal.kill", { terminal: k.address }), ka && this.mark(ka, t, 10)))
         .child(lead(kind === "process" ? CPU : BOT, last))
         .when(Boolean(ka), (el) => el.child(agentIcon((ka ?? k).program)))
-        .child(body(div().text_color(t.muted).child(name), [
+        .child(body(div().text_color(t.muted).child(hide(name, "agent")), [
           facts(info?.model && modelName(info.model), info && ctx(info.context), ran),
           // "→ space" (a click goes to that space).
           (where || sshed) && linkChip(t, `kid-chip-${k.address}`, { dir: "out", icon: kind === "process" ? CPU : BOT, color: c, to: !where && sshed }),
@@ -1734,7 +1748,7 @@ export default class Spaces extends View {
         .child(status(id, () => ask(stop), spinner()))
         .child(lead(SUB, last))
         .child(agentIcon(a.program))
-        .child(body(div().text_color(t.muted).child(x.desc || "Subagent"),
+        .child(body(div().text_color(t.muted).child(hide(x.desc, "text") || "Subagent"),
           [facts(now - x.at > 60 && "waiting", o.subModel && x.model && modelName(x.model), o.subEffort && effortName(x.effort),
             x.type && x.type.toLowerCase() !== "general-purpose" && x.type.toLowerCase(), o.subContext && x.tokens > 0 && tokensK(x.tokens), o.subTime && x.start && ranFor(now - x.start)),
             sshed && linkChip(t, `sub-chip-${a.address}-${x.id}`, { dir: "out", icon: SUB, color: c, to: sshed })].filter(Boolean)));
@@ -1749,7 +1763,7 @@ export default class Spaces extends View {
         .child(status(id, () => ask(`Close your subagent "${x.desc}", then tell me in one line.`), spinner()))
         .child(lead(SUB, last))
         .child(agentIcon(a.program))
-        .child(body(div().text_color(t.muted).child(x.desc || "Subagent"), [facts(x.schedule !== "subagent" && x.schedule, x.start && ranFor(now - x.start))]));
+        .child(body(div().text_color(t.muted).child(hide(x.desc, "text") || "Subagent"), [facts(x.schedule !== "subagent" && x.schedule, x.start && ranFor(now - x.start))]));
     };
 
     // A Claude Code session's background shell, monitor, scheduled prompt or
@@ -1779,7 +1793,7 @@ export default class Spaces extends View {
           : toAgent(e)))
         .child(status(id, stop, null))
         .child(lead(cron ? CLOCK : CPU, last))
-        .child(body(div().text_color(t.muted).child(x.desc || (cron ? "Scheduled prompt" : "Background command")), [what]));
+        .child(body(div().text_color(t.muted).child(hide(x.desc, "text") || (cron ? "Scheduled prompt" : "Background command")), [what]));
     };
 
     return items.flatMap((it, i) => {
@@ -2087,7 +2101,7 @@ export default class Spaces extends View {
         })
         .when(collapsed, (el) => el.text_color(projects ? MARK[hue(name)] : t.foreground).child([...name][0]?.toUpperCase() ?? "?"))
         .when(!collapsed, (el) => el
-          .child(div().flex_shrink(0).max_w(150).truncate().text_color(projects ? MARK[hue(name)] : t.foreground).child(name))
+          .child(div().flex_shrink(0).max_w(150).truncate().text_color(projects ? MARK[hue(name)] : t.foreground).child(hide(name, "project")))
           .when(Boolean(g?.web) && this.frame.options.github, (el) => el.child(this.ghLink(g, t)))
           .when(Boolean(g), (el) => el.children(this.counts(g, t, (cx) => this.showChanges({ name, folder: dir }, cx))))
           .child(h_flex().w(FOLD).flex_none().items_center().justify_center()
@@ -2140,7 +2154,7 @@ export default class Spaces extends View {
             cx.notify();
           })
           .child(h_flex().flex_none().pl(16).child(svg("mods/workspace-chrome/branch.svg").size(13).text_color(t.dim)))
-          .child(div().flex_shrink(0).max_w(150).truncate().text_color(this.spaceColor(r.w, t) ?? t.foreground).child(name))
+          .child(div().flex_shrink(0).max_w(150).truncate().text_color(this.spaceColor(r.w, t) ?? t.foreground).child(hide(name, "project")))
           // Its own files and commits; the repo's pull requests, issues and stars are on the space's row.
           .when(Boolean(g), (el) => el.children(this.counts({ ...g, slug: null }, t, (cx) => this.showChanges({ name, folder: dir }, cx))))
           .child(h_flex().w(FOLD).flex_none().items_center().justify_center()
@@ -2231,7 +2245,7 @@ export default class Spaces extends View {
       .on_mouse_down("right", () => (m ? this.folderMenu(dir, m) : this.rightClick(`c:${dir}`, () => this.folderMenu(dir))))
       .when(collapsed, el => el.child([...name][0]?.toUpperCase() ?? "?"))
       .when(!collapsed, el => (g => el
-        .child(div().flex_shrink(0).max_w(150).truncate().child(name))
+        .child(div().flex_shrink(0).max_w(150).truncate().child(hide(name, "project")))
         .when(Boolean(g?.web) && this.frame.options.github, el => el.child(this.ghLink(g, t)))
         .when(Boolean(g), el => el.children(this.counts(g, t, (cx) => this.showChanges({ name, folder: dir }, cx))))
         .child(this.tail(g, null, name, t, this.hoverSpace === key && dir))
@@ -2772,7 +2786,7 @@ export default class Spaces extends View {
           .gap(9)
           .items_center()
           .when(Boolean(tree), el => el.pl(16).child(svg("mods/workspace-chrome/branch.svg").size(13).text_color(t.dim)))
-          .child(div().flex_shrink(0).max_w(150).truncate().text_color(fill).child(this.title(w)))
+          .child(div().flex_shrink(0).max_w(150).truncate().text_color(fill).child(this.title(w) === "~" ? "~" : hide(this.title(w), "project")))
           .when(Boolean(g?.web) && !tree && this.frame.options.github, el => el.child(this.ghLink(g, t)))
           .when(Boolean(g), el => el.children(this.counts(g, t, (cx) => this.showChanges({ id: w.id }, cx))))
           .child(this.agentFold(w, t))

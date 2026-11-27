@@ -53,6 +53,7 @@ const until = (at) => {
 
 // The agent's name: a tab named by hand, else its session's title, else its space.
 function name(a) {
+  if (shared("lumiherd.private")) return "agen";
   const tab = a.tab_name ?? "";
   if (tab && tab !== a.program?.name && !/^(\d+|t[0-9a-z]+)$/.test(tab)) return tab;
   return agentTask(a, null) || a.space_name || "agen";

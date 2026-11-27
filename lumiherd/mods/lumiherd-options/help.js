@@ -323,6 +323,13 @@ export function helpTopics(view, t) {
           line(key("Click"), "Go to the agent she means"),
           note("Hide her in Options › Panels & Lumi"),
         ]),
+      topic("Privacy",
+        frame(
+          agent("Agen SP", { status: spinner(), two: true, info: [div().text_color(BLUE).child("~/\u2026/Proyek AT"), ...facts("Opus 5.5", "med")] })), [
+          line(svg("mods/lumiherd-footer/eye.svg").size(13).text_color(t.foreground), "The eye by the search, for screen shares: names become steady aliases"),
+          note("Projects and folders, agents, tasks and subagents' words, tab names and Lumi's bubble. Timeline and Tasks hide what's in them"),
+          note("Not the terminals themselves, nor Files, Changes and PRs (other mods): close what shows a name you'd rather not share"),
+        ]),
       topic("Select several",
         side(
           frame(
