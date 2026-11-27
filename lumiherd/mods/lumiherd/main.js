@@ -95,6 +95,16 @@ const MARKED = `{ for d in "$@"; do case "$d" in "~") d=$HOME ;; "~/"*) d="$HOME
   find "$HOME" -maxdepth 3 \\( -path "$HOME/.*" -o -name node_modules \\) -prune -o \\
     \\( -name CLAUDE.md -o -name CLAUDE.local.md -o -name AGENTS.md -o \\( -name .claude -type d \\) \\) -print 2>/dev/null
 } | sed 's#/[^/]*$##' | sort -u`;
+// A pull request's checks in one word: "fail" if any failed, else "pending" while any
+// runs, else "pass"; null without checks. Check runs have a conclusion, statuses a state.
+function ciState(checks) {
+  if (!checks?.length) return null;
+  const bad = ["FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"];
+  if (checks.some((c) => bad.includes(c.conclusion) || bad.includes(c.state))) return "fail";
+  if (checks.some((c) => (c.status && c.status !== "COMPLETED") || c.state === "PENDING" || c.state === "EXPECTED")) return "pending";
+  return "pass";
+}
+
 // A computer's two places (set in lumiherd-options): Chats, where conversations
 // about no project start (home unless set), and Projects, where every git repo
 // is a project and hand-offs (handoff.sh) make new ones. Unset, Projects is the
@@ -909,7 +919,12 @@ export default class Spaces extends View {
         run("layout.show", { id: "panel" });
       })
       .child(svg("mods/lumiherd/pull-request.svg").size(10).flex_none())
-      .child(`#${pr.number}${pr.draft ? " draft" : ""}`);
+      .child(`#${pr.number}${pr.draft ? " draft" : ""}`)
+      // Its checks: ✓ passed, ✗ failed, ● running (and blinking).
+      .when(Boolean(pr.ci), (el) => el.child(div().pl(1).font_semibold()
+        .text_color(pr.ci === "pass" ? t.ansi2 : pr.ci === "fail" ? t.ansi1 : t.ansi3)
+        .when(pr.ci === "pending", (x) => x.loop("opacity", { from: 0.35, to: 1, period: 1000 }))
+        .child(pr.ci === "pass" ? "\u2713" : pr.ci === "fail" ? "\u2717" : "\u25cf")));
   }
 
   // An agent's task now, from plan-progress (this.plans by its session): the bar that
@@ -2620,13 +2635,13 @@ export default class Spaces extends View {
       this.write[g.slug] = ["ADMIN", "MAINTAIN", "WRITE"].includes(perm);
       this.repoInfo[g.slug] = { stars: Number(stars) || 0, issues: Number(issues) || 0 };
     }
-    const r = await exec("gh", ["pr", "list", "--repo", g.slug, "--state", "open", "--limit", "100", "--json", "number,reviewRequests,author,headRefName,url,isDraft"]);
+    const r = await exec("gh", ["pr", "list", "--repo", g.slug, "--state", "open", "--limit", "100", "--json", "number,reviewRequests,author,headRefName,url,isDraft,statusCheckRollup"]);
     if (r.code === 0) {
       // Someone else's project you only cloned: just the PRs that involve you.
       const list = JSON.parse(r.stdout).filter((p) => this.write[g.slug] !== false || p.author?.login === me
         || (p.reviewRequests ?? []).some((q) => q.login === me));
       const byBranch = {};
-      for (const p of list) byBranch[p.headRefName] ??= { number: p.number, url: p.url, draft: p.isDraft };
+      for (const p of list) byBranch[p.headRefName] ??= { number: p.number, url: p.url, draft: p.isDraft, ci: ciState(p.statusCheckRollup) };
       this.prs[g.slug] = { open: list.length, review: list.filter((p) => (p.reviewRequests ?? []).some((q) => q.login === me)).length, byBranch };
     }
   }
