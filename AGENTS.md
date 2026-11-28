@@ -49,6 +49,15 @@ Windows PC), so every change has to work on both.
   has to follow it.
 - Commands on another machine: `exec(cmd, args, { on: machine })`.
 
+## Comments
+- The header of a mod (what it shows, where its data comes from) is its
+  documentation: keep it true when the mod changes.
+- Elsewhere, a comment only for a "why" the code can't say: an outside
+  constraint (Windows, a Herdr quirk, a safety rule).
+- No history ("was X, now Y"), no restating the code, no notes to yourself.
+- A comment that excuses a pattern others could copy (a timer, a workaround)
+  means the rule belongs in `check.sh` or in a helper, not in a comment.
+
 ## Windows (Hyperion, `ssh hyperion`)
 - Run PowerShell from a `.ps1` copied over with scp: inline quoting through cmd
   breaks.
@@ -66,7 +75,9 @@ Windows PC), so every change has to work on both.
 - Keys (Z.ai and others) go through stdin or a file, never in argv or output.
 
 ## Testing
-- `herdr-app check` per mod. It fails headless over SSH: check on the desktop.
-- `herdr-app shot` for a screenshot. Crop to the part under test: the small
-  shell under the right panel can show secrets. Delete the screenshot after.
+- `./check.sh` before every pull request (CI runs it too). When an agent makes
+  the same mistake twice, add a check there instead of another line here.
+- `./shot.sh [right|left|full]` to see a change: it hides the small shell
+  (it can show secrets), crops, and deletes shots after 10 minutes. Not a raw
+  `herdr-app shot`.
 - After a merge, install on the Mac and on Hyperion (`git pull` there too).
