@@ -16,10 +16,14 @@ import { spaces, machines, panes, agents, terminals, setAgentOrder, run, openOve
 import { plan, plural } from "./close-plan.js";
 import { codexTitle, agentTask, isCodex, sentenceCase } from "./agent-name.js";
 
-// Python 3 runs as "python3", else "python" (as on Windows): found once.
-let PY = null;
-const python = (args) => (PY ??= exec("python3", ["-c", "1"]).then((r) => (r?.code === 0 ? "python3" : "python"), () => "python"))
-  .then((p) => exec(p, args));
+// Python 3 runs as "python3", else "python" (as on Windows): found once per computer
+// (m: a machine's name, or none for this one).
+const PY = {};
+const python = (args, m) => {
+  const on = m ? { on: m } : {};
+  return (PY[m ?? ""] ??= exec("python3", ["-c", "1"], on).then((r) => (r?.code === 0 ? "python3" : "python"), () => "python"))
+    .then((p) => exec(p, args, on));
+};
 
 // Closing asks first (lumiherd-close says how many terminals and agents end)
 // when a whole space would go or an agent that's still working would end, else
@@ -688,7 +692,7 @@ export default class Spaces extends View {
           const [m] = a.address.includes("/") ? a.address.split("/") : [null];
           const key = m ?? "";
           if (key in into || (m && !this.machines.some((x) => x.name === m && x.state === "connected"))) continue;
-          const r = await (m ? exec("python3", ["-c", script], { on: m }) : python(["-c", script])).catch(() => null);
+          const r = await python(["-c", script], m).catch(() => null);
           try { into[key] = JSON.parse(r?.stdout || "{}"); } catch { into[key] = {}; }
         }
         for (const a of [...listed, ...kids]) {
