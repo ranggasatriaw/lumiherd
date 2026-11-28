@@ -6,7 +6,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
-import { props, closeOverlay, theme, exec, hc, home } from "herdr";
+import { props, closeOverlay, theme, exec, hc, home, shared } from "herdr";
 
 // lumiherd's handoff.sh, as lumiherd (syncHelpers) installs it on each computer:
 // outside the mod folder because agents run it by this path (from the hand-off
@@ -26,7 +26,9 @@ export default class Handoff extends View {
     cx.spawn(async (cx) => {
       // The spaces on the agent's own computer ("laptop/t3" is another one's).
       const m = props()?.terminal?.includes("/") ? props().terminal.split("/")[0] : null;
-      const r = await exec("sh", ["-c", '[ -f "$HOME/$1" ] || exit 3; sh "$HOME/$1" --list', "sh", SCRIPT], m ? { on: m } : {}).catch(() => null);
+      // sh as lumiherd found it there (Git's on Windows).
+      const sh = shared("lumiherd.sh")?.[m ?? ""] ?? "sh";
+      const r = await exec(sh, ["-c", '[ -f "$HOME/$1" ] || exit 3; sh "$HOME/$1" --list', "sh", SCRIPT], m ? { on: m } : {}).catch(() => null);
       this.missing = r?.code === 3; // no helper there: nothing to hand off with
       this.spaces = (r?.stdout ?? "").split("\n").filter(Boolean);
       cx.notify();
@@ -36,7 +38,7 @@ export default class Handoff extends View {
   // Existing spaces whose folder name has what's typed in it.
   matches() {
     const q = this.text.trim().toLowerCase();
-    return q ? this.spaces.filter((d) => d.split("/").pop().toLowerCase().includes(q)) : this.spaces;
+    return q ? this.spaces.filter((d) => d.split(/[\\/]/).pop().toLowerCase().includes(q)) : this.spaces;
   }
 
   go(target) {
@@ -51,7 +53,7 @@ export default class Handoff extends View {
     const t = theme();
     const p = props() ?? {};
     const list = this.matches();
-    const fresh = this.text.trim() && !this.spaces.some((d) => d.split("/").pop() === this.text.trim());
+    const fresh = this.text.trim() && !this.spaces.some((d) => d.split(/[\\/]/).pop() === this.text.trim());
     const row = (id, icon, text, hint, target) => h_flex().id(id).h(30).px(8).gap(10).items_center().rounded(7).cursor_pointer()
       .hover((s) => s.bg(t.hover)).on_click(() => this.go(target))
       .child(svg(`mods/workspace-chrome/${icon}.svg`).size(14).flex_none().text_color(t.dim))
