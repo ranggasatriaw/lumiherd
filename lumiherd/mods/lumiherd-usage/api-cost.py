@@ -11,7 +11,7 @@
 import datetime, json, os, re, sys
 
 DAYS = 30
-VERSION = 2  # Bump when prices change: the cache holds costs.
+VERSION = 7  # Bump when prices change or a call's entry does: the cache holds costs.
 # Dollars per million tokens: input, output, cache read. A cache write is 1.25x input
 # for 5 minutes, 2x for an hour.
 PRICES = {
@@ -45,9 +45,53 @@ def cost(name, u):
         + five * p[0] * 1.25 + hour * p[0] * 2) / 1e6
 
 
+ROOTS = {}
+
+
+def project_name(cwd):
+    # A project's folder name: its repo's (the nearest folder up with .git), so a
+    # session in repo/src counts as repo; a worktree in the repo counts as the repo.
+    # Not in a repo: the folder right under ~/dev, ~/Code or ~/Projects, else its own.
+    if not cwd:
+        return "?"
+    if cwd in ROOTS:
+        return ROOTS[cwd]
+    path = cwd.replace("\\", "/").rstrip("/")
+    if "/Claude/scratch-workspaces/" in path or "/Claude/claude-code-sessions/" in path:
+        ROOTS[cwd] = "Claude Desktop (scratch)"
+        return ROOTS[cwd]
+    for mark in ("/.claude/worktrees/", "/.worktrees/"):
+        if mark in path:
+            path = path.split(mark)[0]
+    root, up = None, path
+    while up and "/" in up.strip("/"):
+        if os.path.exists(os.path.join(up, ".git")):
+            root = up
+            break
+        up = up.rsplit("/", 1)[0]
+    if root is None:
+        home = os.path.expanduser("~").replace("\\", "/").rstrip("/")
+        root = path
+        for top in ("dev", "Code", "Projects"):
+            base = f"{home}/{top}/"
+            if path.lower().startswith(base.lower()):
+                root = base + path[len(base):].split("/")[0]
+                break
+    ROOTS[cwd] = root.rsplit("/", 1)[-1] or "?"
+    return ROOTS[cwd]
+
+
+def tokens(u):
+    # [input, output, cache read, cache write]
+    return [u.get("input_tokens") or 0, u.get("output_tokens") or 0,
+            u.get("cache_read_input_tokens") or 0, u.get("cache_creation_input_tokens") or 0]
+
+
 def read_transcript(path):
-    # Each API call once, by its id ({id: [day, model, cost]}): it spans several lines.
-    calls = {}
+    # Each API call once, by its id ({"calls": {id: [day, model, cost]}}): it spans several
+    # lines. And the folder most of them ran in ("cwd"): the session's project, though
+    # it started in a scratch folder or cd'ed into a subfolder now and then.
+    calls, where = {}, {}
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             if '"type":"assistant"' not in line:
@@ -61,10 +105,12 @@ def read_transcript(path):
                 at = datetime.datetime.fromisoformat(d["timestamp"].replace("Z", "+00:00"))
                 c = cost(name, use)
                 if c is not None:
-                    calls[d.get("requestId") or d.get("uuid")] = [at.astimezone().strftime("%Y-%m-%d"), name, round(c, 7)]
+                    calls[d.get("requestId") or d.get("uuid")] = [at.astimezone().strftime("%Y-%m-%d"), name, round(c, 7), tokens(use)]
+                    if d.get("cwd"):
+                        where[d["cwd"]] = where.get(d["cwd"], 0) + c
             except (ValueError, KeyError, TypeError, AttributeError):
                 continue
-    return calls
+    return {"calls": calls, "cwd": max(where, key=where.get) if where else None}
 
 
 def scan(root, cutoff, cache):
@@ -93,6 +139,9 @@ def scan(root, cutoff, cache):
 
 
 def main():
+    # --report: for any plan (the Usages panel; also saved to report.json, for Lumi
+    # Assist and the like), with each day's cost by project too.
+    report = "--report" in sys.argv[1:]
     home = os.path.expanduser("~")
     usage = os.path.join(home, ".cache", "lumiherd", "usage")
     try:
@@ -100,10 +149,11 @@ def main():
             saved = json.load(f)
         # "bedrock": what status lines from before other kinds of billing wrote.
         plan = saved.get("api") or ("Bedrock" if saved.get("bedrock") else None)
-        if not plan:
-            return
-    except (OSError, ValueError):
+    except (OSError, ValueError, AttributeError):
+        plan = None
+    if not plan and not report:
         return
+    os.makedirs(usage, exist_ok=True)
     store = os.path.join(usage, "api-cost-cache.json")
     try:
         with open(store) as f:
@@ -115,13 +165,29 @@ def main():
     days = [(now - datetime.timedelta(days=i)).strftime("%Y-%m-%d") for i in range(DAYS - 1, -1, -1)]
     # A resumed chat copies its history into a new file: one count per call across files.
     files = scan(os.path.join(home, ".claude", "projects"), now.timestamp() - (DAYS + 1) * 86400, cache)
+    # Each call with its session's project; a subagent's (<session>/subagents/x.jsonl) is
+    # its session's.
     calls = {}
-    for f in files.values():
-        calls.update(f[2])
+    for p, f in files.items():
+        cwd = f[2]["cwd"]
+        if os.path.basename(os.path.dirname(p)) == "subagents":
+            parent = files.get(os.path.dirname(os.path.dirname(p)) + ".jsonl")
+            cwd = (parent and parent[2]["cwd"]) or cwd
+        pr = project_name(cwd)
+        for k, v in f[2]["calls"].items():
+            calls[k] = v + [pr]
     by_day = {d: {} for d in days}
-    for day, name, c in calls.values():
+    by_project = {d: {} for d in days}
+    # A day's cost and tokens by project and model: {day: {(project, model): [cost, in, out, read, write]}}.
+    cells = {d: {} for d in days}
+    for day, name, c, tok, pr in calls.values():
         if day in by_day:
             by_day[day][name] = by_day[day].get(name, 0) + c
+            by_project[day][pr] = by_project[day].get(pr, 0) + c
+            cell = cells[day].setdefault((pr, name), [0, 0, 0, 0, 0])
+            cell[0] += c
+            for i, n in enumerate(tok):
+                cell[i + 1] += n
     tmp = f"{store}.{os.getpid()}"
     try:
         with open(tmp, "w") as f:
@@ -129,7 +195,21 @@ def main():
         os.replace(tmp, store)
     except OSError:
         pass
-    json.dump({"plan": plan, "days": [{"day": d, "models": {n: round(c, 6) for n, c in by_day[d].items()}} for d in days]}, sys.stdout)
+    out = {"plan": plan, "days": [{"day": d, "models": {n: round(c, 6) for n, c in by_day[d].items()}} for d in days]}
+    if report:
+        for row in out["days"]:
+            row["projects"] = {n: round(c, 6) for n, c in by_project[row["day"]].items()}
+            # [project, model, cost, input, output, cache read, cache write]
+            row["rows"] = [[pr, m, round(v[0], 6), *v[1:]] for (pr, m), v in cells[row["day"]].items()]
+        out = {"at": int(now.timestamp()), "estimate": "tokens at list prices, not a bill", **out}
+        tmp = os.path.join(usage, f"report.json.{os.getpid()}")
+        try:
+            with open(tmp, "w") as f:
+                json.dump(out, f, separators=(",", ":"))
+            os.replace(tmp, os.path.join(usage, "report.json"))
+        except OSError:
+            pass
+    json.dump(out, sys.stdout)
 
 
 if __name__ == "__main__":
