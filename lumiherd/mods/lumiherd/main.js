@@ -15,6 +15,7 @@ import { v_flex, h_flex } from "gpui-base";
 import { spaces, machines, panes, agents, terminals, setAgentOrder, run, openOverlay, exec, hc, home, appHome, readTextFile, theme, shared, setShared, watchFolder, window, layout, notify, focused, nextCommand } from "herdr";
 import { plan, plural } from "./close-plan.js";
 import { codexTitle, agentTask, isCodex, sentenceCase } from "./agent-name.js";
+import { shExec, shAt } from "./sh.js";
 
 // Python 3 runs as "python3", else "python" (as on Windows): found once per computer
 // (m: a machine's name, or none for this one).
@@ -27,7 +28,8 @@ const python = (args, m) => {
 
 // sh on a computer (m: a machine's name, or none for this one). Windows has none on
 // the PATH, but Git for Windows brings one (the shell agents use there), found from
-// git --exec-path. Shared as lumiherd.sh for the other mods. Null without either.
+// git --exec-path. Shared as lumiherd.sh for the other mods (this computer's as "").
+// Null without either.
 const SH = {};
 async function shOn(m) {
   const key = m ?? "", on = m ? { on: m } : {};
@@ -47,7 +49,7 @@ async function shOn(m) {
 const sh = async (args, m) => {
   const p = await shOn(m);
   if (!p) throw new Error("no sh");
-  return exec(p, args, m ? { on: m } : {});
+  return shAt(p, args, m ? { on: m } : {});
 };
 
 // A computer's home, the Projects folder its rules name (or ""), and its project
@@ -56,6 +58,7 @@ const sh = async (args, m) => {
 let PROJECTS_PY = null;
 async function scanOn(m, projects) {
   const on = m ? { on: m } : {};
+  // Plain sh only: Git's (Windows) gives /c/Users/… paths; projects.py does it there.
   const home = await exec("sh", ["-c", 'printf %s "$HOME"'], on).catch(() => null);
   if (home?.code === 0) {
     const named = projects ? "" : (await exec("sh", ["-c", PROJECTS_FROM_RULES], on).catch(() => null))?.stdout.trim() ?? "";
@@ -523,7 +526,7 @@ export default class Spaces extends View {
   // else the host as typed. Kept a minute after it ends, so a command at a time
   // doesn't flicker.
   async findSsh() {
-    const r = await exec("sh", ["-c", SSH_PROCS]).catch(() => null);
+    const r = await shExec(["-c", SSH_PROCS]).catch(() => null);
     const now = Date.now(), seen = {};
     // Addresses, looked up at most every 5 minutes: each computer's, and each
     // destination that names none of them.
@@ -589,6 +592,8 @@ export default class Spaces extends View {
     this.synced ??= {};
     const wanted = shared("sidebar.options")?.computers ?? {};
     const connected = this.machines.filter((m) => m.state === "connected" && this.remote[m.name]).map((m) => m.name);
+    // Every computer's sh, for the other mods too (shared lumiherd.sh).
+    for (const m of [null, ...connected]) await shOn(m);
     this.ruleOn ??= {};
     for (const m of connected) {
       const on = Boolean(wanted[m]?.handoffRule);
@@ -771,7 +776,7 @@ export default class Spaces extends View {
           if (!i.transcript) continue;
           const [m] = addr.includes("/") ? addr.split("/") : [null];
           if (!this.subScript) break;
-          const r = await exec("sh", ["-c", this.subScript, "sh", i.transcript], m ? { on: m } : {}).catch(() => null);
+          const r = await shExec(["-c", this.subScript, "sh", i.transcript], m).catch(() => null);
           const list = (r?.stdout ?? "").split("\n").filter(Boolean).map((l) => { const [id, at, desc, type, model, start, tokens, effort, window, done] = l.split("\t"); return { id, at: +at, desc, type, model, start: +start || null, tokens: +tokens || 0, effort: effort || null, window: +window || 200000, done: done === "1" }; });
           if (list.length) subs[addr] = list.sort((x, y) => y.at - x.at);
         }
@@ -815,7 +820,7 @@ export default class Spaces extends View {
         for (const [addr, i] of Object.entries(info)) {
           if (!i.transcript || !this.taskScript) continue;
           const [m] = addr.includes("/") ? addr.split("/") : [null];
-          const r = await exec("sh", ["-c", this.taskScript, "sh", i.transcript], m ? { on: m } : {}).catch(() => null);
+          const r = await shExec(["-c", this.taskScript, "sh", i.transcript], m).catch(() => null);
           const list = (r?.stdout ?? "").split("\n").filter(Boolean).map((l) => { const [kind, id, desc, start, schedule, output] = l.split("\t"); return { kind, id, desc, start: +start || null, schedule: schedule || null, output: output || null }; });
           if (list.length) tasks[addr] = list;
         }
@@ -825,7 +830,7 @@ export default class Spaces extends View {
         for (const a of [...listed, ...kids].filter((x) => isCodex(x) || /^codex/.test(x.agent ?? ""))) {
           if (!this.codexScript) break;
           const [m, t] = a.address.includes("/") ? a.address.split("/") : [null, a.address];
-          const r = await exec("sh", ["-c", this.codexScript, "sh", t], m ? { on: m } : {}).catch(() => null);
+          const r = await shExec(["-c", this.codexScript, "sh", t], m).catch(() => null);
           const list = (r?.stdout ?? "").split("\n").filter(Boolean).map((l) => { const [kind, id, desc, start, schedule] = l.split("\t"); return { kind, id, desc, start: +start || null, schedule: schedule || null, output: null }; });
           if (list.length) tasks[a.address] = [...(tasks[a.address] ?? []), ...list];
         }
@@ -854,7 +859,7 @@ export default class Spaces extends View {
         // plan-progress's tasks (a Claude Code plugin): its store, "plans:<session id>" -> bars.
         let plans = {};
         try {
-          const r = await exec("sh", ["-c", `cat "$HOME"/.claude/plugins/store/plan-progress_*.json 2>/dev/null | head -c 4000000`]);
+          const r = await shExec(["-c", `cat "$HOME"/.claude/plugins/store/plan-progress_*.json 2>/dev/null | head -c 4000000`]);
           for (const [k, v] of Object.entries(JSON.parse(r?.stdout || "{}"))) if (k.startsWith("plans:") && Array.isArray(v)) plans[k.slice(6)] = v;
         } catch {}
         // Pi's model, thinking level and context: its footer, per terminal.

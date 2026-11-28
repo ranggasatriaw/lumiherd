@@ -17,6 +17,16 @@ grep -rn 'exec("python3"' lumiherd/mods --include='*.js' | grep -v '"python"' | 
   echo "FAIL python3 without a python fallback (Windows): $l"
 done | grep . && fail=1
 
+# sh goes through shExec (sh.js): Windows has only Git's sh, which needs its script
+# base64-encoded. scanOn in lumiherd/main.js wants plain sh only (else projects.py).
+for f in $(find lumiherd/mods -name '*.js' ! -name sh.js); do
+  awk -v f="$f" '/^async function scanOn\(/ { skip = 1 } skip && /^}/ { skip = 0 }
+    !skip && /exec\((sh|"sh"),/ { printf "FAIL exec of sh without shExec (sh.js): %s:%d\n", f, NR }' "$f"
+done | grep . && fail=1
+for f in lumiherd/mods/*/sh.js; do
+  cmp -s "$f" lumiherd/mods/lumiherd/sh.js || bad "$f differs from lumiherd/mods/lumiherd/sh.js (copy it over)"
+done
+
 # JSON: valid, and without the BOM PowerShell 5 writes (Herdr can't read it).
 for f in $(find . -name '*.json' -not -path './.git/*' -not -path '*/node_modules/*'); do
   if [ "$(head -c 3 "$f" | od -An -tx1 | tr -d ' \n')" = "efbbbf" ]; then bad "BOM in $f"; continue; fi

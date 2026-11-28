@@ -6,6 +6,7 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { props, closeOverlay, theme, shared, setShared, agents, run, hc, exec } from "herdr";
+import { shExec } from "./sh.js";
 
 // How each agent renames its session.
 const RENAME = { "claude-code": "/rename", claude: "/rename", codex: "/rename", pi: "/name" };
@@ -35,7 +36,7 @@ export default class Prompt extends View {
       if (command && name) {
         // Sent once the agent is idle: typed mid-reply, it would wait in its
         // input queue instead of running (hc wait returns at once when idle).
-        exec("sh", ["-c", 'hc wait "$1" >/dev/null 2>&1; hc send "$1" "$2"', "sh", p.terminal, `${command} ${name}`]).catch(() => null);
+        shExec(["-c", 'hc wait "$1" >/dev/null 2>&1; hc send "$1" "$2"', "sh", p.terminal, `${command} ${name}`]).catch(() => null);
         // A tab name would show before it: the tab goes back to unnamed when
         // this agent is all it holds.
         if (p.tab && p.alone) run("tab.rename", { id: p.tab, name: "" });

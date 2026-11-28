@@ -16,6 +16,7 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex, InputState, Input } from "gpui-base";
 import { theme, spaces, panes, knownAgents, run, openOverlay, closeOverlay, props, window, keys, exec, home, appHome, shared, setShared, notify, readTextFile, pickFolder, layout } from "herdr";
+import { shExec } from "./sh.js";
 
 // Past sessions of each agent, newest first, as lines of id, when (seconds),
 // title, the folder it ran in, and the model and provider it last used. With a folder ($1): those started there;
@@ -134,8 +135,8 @@ const FOLDERS = `{
 // (shared "projects.on" and "projects.autoOn", kept by lumiherd).
 async function scanFolders(machine = null) {
   const on = machine ? { on: machine } : {};
-  const r = await exec("sh", ["-c", FOLDERS], on).catch(() => null);
-  const h = machine ? ((await exec("sh", ["-c", 'printf %s "$HOME"'], on).catch(() => null))?.stdout ?? "") : home();
+  const r = await shExec(["-c", FOLDERS], machine).catch(() => null);
+  const h = machine ? ((await shExec(["-c", 'printf %s "$HOME"'], machine).catch(() => null))?.stdout ?? "") : home();
   const mine = machine ? shared("projects.on")?.[machine] ?? {} : null;
   // The Projects folder itself (lumiherd's, shared) only holds spaces.
   const code = new Set(machine ? [(shared("lumiherd.remoteLocations")?.[machine]?.projects ?? "~/Code").replace(/^~(?=\/|$)/, h)] : shared("projects.codeFolders") ?? [`${home()}/Code`]);
@@ -192,7 +193,7 @@ export default class NewMenu extends View {
     // Models served on the computer it's for, from its Pi list: an agent can start on one.
     this.machine = props()?.machine ?? (props()?.folder || props()?.computer ? null : spaces().find(s => s.active)?.machine ?? null);
     const read = (path) => this.machine
-      ? exec("sh", ["-c", `cat "$HOME/${path}"`], { on: this.machine }).then(r => (r.code === 0 ? r.stdout : null))
+      ? shExec(["-c", `cat "$HOME/${path}"`], this.machine).then(r => (r.code === 0 ? r.stdout : null))
       : readTextFile(`${home()}/${path}`);
     this.local = [];
     this.codexBases = new Set();
@@ -237,10 +238,9 @@ export default class NewMenu extends View {
     });
     // The computer it's for: another one's sessions are looked for there.
     this.machine = props()?.machine ?? (props()?.folder || props()?.computer ? null : space?.machine ?? null);
-    const there = this.machine ? { on: this.machine } : {};
     if (this.folder != null)
       for (const [key, script] of Object.entries(SESSIONS)) cx.spawn(async cx => {
-        const r = await exec("sh", ["-c", script, "sh", this.folder.replace(/\/+$/, "")], there).catch(() => null);
+        const r = await shExec(["-c", script, "sh", this.folder.replace(/\/+$/, "")], this.machine).catch(() => null);
         const list = (r?.stdout ?? "").split("\n").filter(Boolean).map(l => {
           const [id, when, title, cwd, model, provider, cleared] = l.split("\t");
           // Clear + recap renames the old one "[Cleared] <name>"; one found
@@ -252,7 +252,7 @@ export default class NewMenu extends View {
         // Only ones that can be resumed where they ran: not in a folder that's
         // gone (old test runs in /tmp) or an agent's scratch folder.
         const dirs = [...new Set(list.map(x => x.cwd))];
-        const here = await exec("sh", ["-c", 'for d; do [ -d "$d" ] && printf "%s\\n" "$d"; done', "sh", ...dirs], there).catch(() => null);
+        const here = await shExec(["-c", 'for d; do [ -d "$d" ] && printf "%s\\n" "$d"; done', "sh", ...dirs], this.machine).catch(() => null);
         const live = new Set((here?.stdout ?? "").split("\n").filter(Boolean));
         this.sessions[key] = list.filter(x => live.has(x.cwd) && !/^\/tmp\/claude-\d+\//.test(x.cwd));
         cx.notify();
@@ -403,7 +403,7 @@ export default class NewMenu extends View {
     this.browse = { dir, full: null, subs: null };
     cx.notify();
     cx.spawn(async (cx) => {
-      const r = await exec("sh", ["-c", SUBFOLDERS, "sh", dir], this.machine ? { on: this.machine } : {}).catch(() => null);
+      const r = await shExec(["-c", SUBFOLDERS, "sh", dir], this.machine).catch(() => null);
       if (this.browse?.dir !== dir) return; // moved on meanwhile
       const lines = (r?.stdout ?? "").split("\n").filter(Boolean);
       this.browse = { dir, full: r?.code === 0 ? lines[0] : null, subs: r?.code === 0 ? lines.slice(1) : [] };

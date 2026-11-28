@@ -8,6 +8,7 @@ import { v_flex, h_flex } from "gpui-base";
 import { plan } from "./close-plan.js";
 import { agentTask } from "./agent-name.js";
 import { run, props, closeOverlay, openOverlay, theme, themes, keys, terminals, spaces, panes, agents, exec, home, shared, setShared } from "herdr";
+import { shExec } from "./sh.js";
 
 // Where a space is now: its first terminal's live folder, else where it was made.
 function place(s) {
@@ -170,7 +171,7 @@ const SEPARATE = `${WAIT}
 while [ $# -ge 2 ]; do move "$1" "$2" ""; [ -n "$tab" ] && herdr-app do tab.rename "{\\"id\\":\\"$tab\\",\\"name\\":\\"\\"}" >/dev/null; shift 2; done`;
 
 function movePanes(script, args) {
-  exec("sh", ["-c", script, "sh", ...args]);
+  shExec(["-c", script, "sh", ...args]);
 }
 
 // What the picked panes allow: grouping 2+ terminals of one machine into the
@@ -260,7 +261,7 @@ export default class Menu extends View {
     if (it[1] === "worktree") openOverlay({ mod: "worktree", kind: "dialog", ...(it[2].action === "open" ? { width: 560, height: 480 } : { width: 440, height: 260 }), props: it[2] });
     else if (it[1] === "close-ask") closeAsk(it[2]);
     else if (it[1] === "project.open") openOverlay({ mod: "lumiherd-new-menu", kind: "popup", width: 340, height: 640, props: it[2] });
-    else if (it[1] === "folder.reveal") exec("sh", ["-c", REVEAL, "sh", it[2].folder]).catch(() => null);
+    else if (it[1] === "folder.reveal") shExec(["-c", REVEAL, "sh", it[2].folder]).catch(() => null);
     else if (it[1] === "project.rename") openOverlay({ mod: "lumiherd-rename", kind: "dialog", width: 380, height: 200, props: { folder: it[2].folder, machine: it[2].machine, value: it[2].name, title: "Rename space" } });
     else if (it[1] === "pane.rename") renamePane(it[2]);
     else if (it[1] === "pane.handoff") {
