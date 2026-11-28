@@ -693,13 +693,13 @@ export default class Spaces extends View {
         }
         for (const a of [...listed, ...kids]) {
           const [m, t] = a.address.includes("/") ? a.address.split("/") : [null, a.address];
-          if (m && !(this.remote[m]?.home && this.machines.some((x) => x.name === m && x.state === "connected"))) continue;
+          if (m && !this.machines.some((x) => x.name === m && x.state === "connected")) continue;
           try {
             const found = ci[m ?? ""]?.[t] ?? oi[m ?? ""]?.[t];
             const agy = ai[m ?? ""]?.[t];
             // Antigravity: what its status line saved, if it's on, adds the context
             // (agy's files don't have it readably); the rest from agy-info.py wins.
-            const text = found ? null : m ? await readTextFile(`${this.remote[m].home}/.cache/lumiherd/agents/${t}.json`, { on: m }).catch(() => null)
+            const text = found ? null : m ? !this.remote[m]?.home ? null : await readTextFile(`${this.remote[m].home}/.cache/lumiherd/agents/${t}.json`, { on: m }).catch(() => null)
               : await readTextFile(`${this.infoDir}/${a.address}.json`).catch(() => null);
             let saved = null;
             try { saved = text ? JSON.parse(text) : null; } catch {}
