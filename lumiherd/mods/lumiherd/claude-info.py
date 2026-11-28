@@ -19,7 +19,28 @@ OUT = os.path.join(HOME, ".cache", "lumiherd", "agents")
 TAIL = 4 * 1024 * 1024  # enough of the conversation's end for the last reply and request
 
 
+WINDOWS = os.name == "nt"
+
+
+def win_process(pid, access):
+    import ctypes
+    k = ctypes.WinDLL("kernel32", use_last_error=True)
+    k.OpenProcess.restype = ctypes.c_void_p
+    h = k.OpenProcess(access, False, pid)
+    return k, h
+
+
 def alive(pid):
+    if WINDOWS:
+        # os.kill(pid, 0) is a Ctrl+C on Windows (CTRL_C_EVENT is 0).
+        import ctypes
+        k, h = win_process(pid, 0x1000)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not h:
+            return False
+        code = ctypes.c_ulong()
+        ok = k.GetExitCodeProcess(ctypes.c_void_p(h), ctypes.byref(code))
+        k.CloseHandle(ctypes.c_void_p(h))
+        return bool(ok) and code.value == 259  # STILL_ACTIVE
     try:
         os.kill(pid, 0)
         return True
@@ -29,8 +50,43 @@ def alive(pid):
         return False
 
 
+def windows_environ(pid):
+    # Windows has no ps and no /proc: the environment block is read from the
+    # process's memory (PEB -> RTL_USER_PROCESS_PARAMETERS), 64-bit offsets.
+    import ctypes
+    k, h = win_process(pid, 0x1000 | 0x0010)  # QUERY_LIMITED_INFORMATION | VM_READ
+    if not h:
+        return b""
+    h = ctypes.c_void_p(h)
+    try:
+        info = (ctypes.c_void_p * 6)()  # PROCESS_BASIC_INFORMATION; [1] is PebBaseAddress
+        if ctypes.WinDLL("ntdll").NtQueryInformationProcess(h, 0, info, ctypes.sizeof(info), None) != 0:
+            return b""
+
+        def mem(addr, size):
+            buf = ctypes.create_string_buffer(size)
+            n = ctypes.c_size_t()
+            if not k.ReadProcessMemory(h, ctypes.c_void_p(addr), buf, size, ctypes.byref(n)):
+                raise OSError(ctypes.get_last_error())
+            return buf.raw[:n.value]
+
+        ptr = lambda addr: int.from_bytes(mem(addr, 8), "little")
+        params = ptr(info[1] + 0x20)
+        env, size = ptr(params + 0x80), ptr(params + 0x3F0)
+        return mem(env, min(size, 1 << 20)).decode("utf-16-le", "replace").encode()
+    except Exception:
+        return b""
+    finally:
+        k.CloseHandle(h)
+
+
 def terminal_of(pid):
     # Linux: the process's environment; macOS: ps shows it for your own processes.
+    if WINDOWS:
+        for kv in windows_environ(pid).split(b"\0"):
+            if kv.startswith(b"HC_TERMINAL_ID="):
+                return kv.split(b"=", 1)[1].decode()
+        return None
     try:
         with open(f"/proc/{pid}/environ", "rb") as f:
             for kv in f.read().split(b"\0"):
