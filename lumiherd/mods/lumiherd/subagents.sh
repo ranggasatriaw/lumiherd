@@ -19,6 +19,13 @@
 # reads only what was added since; one that got shorter or starts differently
 # was written anew, and is read from the top. What a subagent's own file says
 # is kept too (a .seen file), until that file changes.
+# Windows (Git's sh): the path with forward slashes (jq's @tsv doubles
+# backslashes, and file names are keys here), and jq.exe without its CRs (-b).
+if command -v cygpath > /dev/null 2>&1; then
+  set -- "$(cygpath -m "$1")"; jq() { command jq -b "$@"; }; xjq="jq -b"
+else
+  xjq=jq
+fi
 dir="${1%.jsonl}/subagents"; [ -d "$dir" ] || exit 0
 now=$(date +%s)
 cachedir="${XDG_CACHE_HOME:-$HOME/.cache}/lumiherd"; mkdir -p "$cachedir"
@@ -135,12 +142,12 @@ done
 if [ -s "$w.list" ]; then
   if stat -c %Y / > /dev/null 2>&1; then sfmt='-c %n|%Y|%s'; else sfmt='-f %N|%m|%z'; fi
   sed 's/$/.jsonl/' "$w.list" | tr '\n' '\0' | xargs -0 stat $sfmt > "$w.stat" 2>/dev/null
-  sed 's/$/.meta.json/' "$w.list" | tr '\n' '\0' | xargs -0 jq -r '[input_filename, .description // "", .agentType // ""] | @tsv' > "$w.meta" 2>/dev/null ||
+  sed 's/$/.meta.json/' "$w.list" | tr '\n' '\0' | xargs -0 $xjq -r '[input_filename, .description // "", .agentType // ""] | @tsv' > "$w.meta" 2>/dev/null ||
     while read -r b; do jq -r '[input_filename, .description // "", .agentType // ""] | @tsv' "$b.meta.json" 2>/dev/null; done < "$w.list" > "$w.meta"
   # Newer Claude Codes mark it done in its meta file too (and unmark it on a resume).
   sed 's/$/.meta.json/' "$w.list" | tr '\n' '\0' | xargs -0 grep -l '"finished":true' > "$w.fin" 2>/dev/null
   # Teammates (named subagents) and their descriptions, to match a stop notice by.
-  sed 's/$/.meta.json/' "$w.list" | tr '\n' '\0' | xargs -0 jq -r 'select(.taskKind == "in_process_teammate") | [input_filename, (.description // "" | @base64)] | @tsv' > "$w.tm" 2>/dev/null ||
+  sed 's/$/.meta.json/' "$w.list" | tr '\n' '\0' | xargs -0 $xjq -r 'select(.taskKind == "in_process_teammate") | [input_filename, (.description // "" | @base64)] | @tsv' > "$w.tm" 2>/dev/null ||
     while read -r b; do jq -r 'select(.taskKind == "in_process_teammate") | [input_filename, (.description // "" | @base64)] | @tsv' "$b.meta.json" 2>/dev/null; done < "$w.list" > "$w.tm"
 fi
 printf '%s\n' "$signals" > "$w.sig"
