@@ -1135,6 +1135,8 @@ export default class Spaces extends View {
       o.model && i.model ? div().child(i.model) : null,
       o.effort && i.effort ? h_flex().items_center().child(i.effort === "medium" ? "med" : i.effort)
         .when(Boolean(i.ultracode), (el) => el.child(div().text_color(MARK.ansi5).child("*"))) : null,
+      // Only when off: Remote Control is usually on for every session (remoteControlAtStartup).
+      i.remote === false ? div().id(`no-remote-${terminal}`).text_color(t.ansi3).tooltip("Remote Control is off: you can't reach this session from claude.ai or your phone").child("no remote") : null,
       // Context always shows when on: 0% before the first reply. In the game look it's
       // MP, the context left: five cells and the points, red and blinking at 20 or less.
       o.context && o.game === false ? div().text_color(color).child(`${pct}%`) : null,
