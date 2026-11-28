@@ -296,6 +296,7 @@ export function helpTopics(view, t) {
           tlCard("#2", "15:30", "why does the build fail on ci?", facts("done 15:38", "8m", "↓ 12k tokens", "2 files"), false)), [
           note("Your prompts in the agent you're in, newest first"),
           line(key("Click"), "Read the whole prompt and the reply"),
+          line(key("Files"), "Every file it changed, newest first; click for the prompt"),
           line(small("↓ 12k"), "Tokens it wrote, as the CLI counts them"),
           line(small("context"), "What it holds now (header)"),
         ]),
