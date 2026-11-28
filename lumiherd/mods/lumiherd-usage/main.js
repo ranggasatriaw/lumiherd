@@ -32,6 +32,7 @@
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { theme, exec, home, appHome, run, shared, setShared, layout, notify, readTextFile, machines } from "herdr";
+import { shExec } from "./sh.js";
 
 const BLOCK = "usage";
 // Is this copy the Lumiherd layout's (its "usage" block above the footer)? Else it
@@ -143,16 +144,16 @@ export default class Usage extends View {
     const dir = `${home()}/.cache/lumiherd/usage`;
     const claude = await readJson(`${dir}/claude.json`);
     const api = claude?.api || claude?.bedrock ? await apiRow(null) : null;
-    const plan = api ? null : (await exec("sh", ["-c", CLAUDE_PLAN]).catch(() => null))?.stdout.trim();
-    const account = (await exec("sh", ["-c", ACCOUNT]).catch(() => null))?.stdout.trim() || null;
-    const codex = await exec("sh", ["-c", CODEX]).then((r) => JSON.parse(r.stdout || "null")).catch(() => null);
+    const plan = api ? null : (await shExec(["-c", CLAUDE_PLAN]).catch(() => null))?.stdout.trim();
+    const account = (await shExec(["-c", ACCOUNT]).catch(() => null))?.stdout.trim() || null;
+    const codex = await shExec(["-c", CODEX]).then((r) => JSON.parse(r.stdout || "null")).catch(() => null);
     const agy = await readJson(`${dir}/antigravity.json`);
     if (!this.zaiAt || Date.now() - this.zaiAt >= ZAI_EVERY) {
       this.zaiAt = Date.now();
-      const r = await exec("sh", ["-c", ZAI_LIVE]).catch(() => null);
+      const r = await shExec(["-c", ZAI_LIVE]).catch(() => null);
       try { const d = JSON.parse(r?.stdout || "null"); if (d?.success && Array.isArray(d.data?.limits)) this.zaiLive = d.data; } catch {}
     }
-    const zai = this.zaiLive ? [] : await exec("sh", ["-c", ZAI]).then((r) => JSON.parse(r.stdout.trim() || "[]")).catch(() => []);
+    const zai = this.zaiLive ? [] : await shExec(["-c", ZAI]).then((r) => JSON.parse(r.stdout.trim() || "[]")).catch(() => []);
     this.mine = { claude, api, plan, account, codex, agy, zai, zaiLive: this.zaiLive };
     this.build();
     this.loadMachines(cx);
@@ -224,7 +225,7 @@ export default class Usage extends View {
       if (this.fetching.has(m)) continue;
       this.fetching.add(m);
       cx.spawn(async (cx) => {
-        const r = await exec("sh", ["-c", REMOTE], { on: m }).catch(() => null);
+        const r = await shExec(["-c", REMOTE], m).catch(() => null);
         const [c, g, account] = (r?.stdout ?? "").split("\n");
         const json = (t) => { try { return t ? JSON.parse(t) : null; } catch { return null; } };
         const claude = json(c);
@@ -346,7 +347,7 @@ export default class Usage extends View {
   setUpClaude(cx) {
     const mods = `${appHome().replace(/\\/g, "/")}/mods`;
     cx.spawn(async (cx) => {
-      const r = await exec("sh", [`${mods}/lumiherd-usage/setup.sh`, "status", "on", `${mods}/lumiherd-usage/claude-statusline.sh`]).catch(() => null);
+      const r = await shExec([`${mods}/lumiherd-usage/setup.sh`, "status", "on", `${mods}/lumiherd-usage/claude-statusline.sh`]).catch(() => null);
       notify(r?.code === 0
         ? { title: "Claude's limits are on their way", body: "They show after Claude Code's next reply, with a status line under its prompt. Agents started from now on get it.", level: "info" }
         : { title: "Couldn't turn on the status line", body: (r?.stderr ?? "").trim() || "Needs sh and jq.", level: "warning" });

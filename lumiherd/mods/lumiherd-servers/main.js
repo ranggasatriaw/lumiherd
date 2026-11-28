@@ -13,6 +13,7 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { theme, exec, home, layout, window, run, shared } from "herdr";
+import { shExec } from "./sh.js";
 
 const EVERY = 5000;
 const DEV = /^(node|nodejs|bun|deno|python[\d.]*|ruby|php|java|go|air|uvicorn|gunicorn|flask|rails|puma|vite|next-server|esbuild|cargo|dotnet|hugo|caddy|nginx|httpd|php-fpm|wrangler|workerd|postgres|mysqld|mariadbd|redis-server|mongod|com\.docker\.backend|docker|ollama|llama-server)$/i;
@@ -52,7 +53,7 @@ export default class Servers extends View {
   }
 
   async readUnix() {
-    const r = await exec("sh", ["-c", LSOF]).catch(() => null);
+    const r = await shExec(["-c", LSOF]).catch(() => null);
     const by = new Map();
     let cur = null;
     for (const line of (r?.stdout ?? "").split("\n")) {
@@ -63,7 +64,7 @@ export default class Servers extends View {
     }
     const pids = [...by.keys()];
     if (pids.length) {
-      const c = await exec("sh", ["-c", `lsof -a -d cwd -p ${pids.join(",")} -Fpn 2>/dev/null`]).catch(() => null);
+      const c = await shExec(["-c", `lsof -a -d cwd -p ${pids.join(",")} -Fpn 2>/dev/null`]).catch(() => null);
       let pid = null;
       for (const line of (c?.stdout ?? "").split("\n")) {
         if (line[0] === "p") pid = Number(line.slice(1));

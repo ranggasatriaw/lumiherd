@@ -7,6 +7,7 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { props, closeOverlay, theme, exec, notify } from "herdr";
+import { shExec } from "./sh.js";
 
 export default class ServerStop extends View {
   init(_props, cx) {
@@ -17,7 +18,7 @@ export default class ServerStop extends View {
   stop() {
     const p = props();
     closeOverlay(p.overlay);
-    const done = p.stop ? exec("sh", ["-c", p.stop]) : exec("kill", [String(p.pid)]);
+    const done = p.stop ? shExec(["-c", p.stop]) : exec("kill", [String(p.pid)]);
     done.catch(() => null).then((r) => notify(r?.code === 0
       ? { title: `Stopped ${p.name}`, level: "success" }
       : { title: `Couldn't stop ${p.name}`, body: (r?.stderr || r?.stdout || "").trim().split("\n").pop(), level: "error" }));

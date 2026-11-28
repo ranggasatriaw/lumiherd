@@ -10,6 +10,7 @@ import { v_flex, h_flex } from "gpui-base";
 import { FolderPick } from "./folder-pick.js";
 import { helpTopics } from "./help.js";
 import { props, closeOverlay, openOverlay, run, theme, shared, setShared, home, appHome, pickFolder, exec, machines, readTextFile, notify } from "herdr";
+import { shExec } from "./sh.js";
 
 export const DEFAULTS = { keepUpToDate: false, handoffRule: false, timeline: true, tasks: true, servers: true, usages: true, panelShell: true, pet: true, agentPr: true, agentTask: true, claudeStatus: false, agyStatus: false, layout: "expanded", model: true, effort: true, context: true, since: true, cache: true, github: true, dirty: true, sync: true, prs: true, stars: true, issues: true,
   subModel: true, subEffort: true, subContext: true, subTime: true,
@@ -139,12 +140,12 @@ export default class SidebarOptions extends View {
     const args = { claudeStatus: ["status", on, MODS()], agyStatus: ["agy", on, MODS()] }[key];
     // The small shell and Lumi are blocks of the layout: shown or hidden with the switch.
     if (BLOCKS[key]) run(o[key] ? "layout.show" : "layout.hide", { id: BLOCKS[key] });
-    if (args) exec("sh", [SETUP(), ...args]).then((r) => {
+    if (args) shExec([SETUP(), ...args]).then((r) => {
       if (r?.code === 4) notify({ title: "Lumiherd needs jq", body: "Install jq (jqlang.org) for this switch, then try again.", level: "warning" });
       this.readClaude();
     }).catch(() => null);
     if (key === "handoffRule" || (key === "locations" && o.handoffRule))
-      exec("sh", ["-c", '[ -f "$HOME/$2" ] && sh "$HOME/$2" --rule "$1"', "sh", o.handoffRule ? "on" : "off", HANDOFF_SCRIPT]).catch(() => null);
+      shExec(["-c", '[ -f "$HOME/$2" ] && sh "$HOME/$2" --rule "$1"', "sh", o.handoffRule ? "on" : "off", HANDOFF_SCRIPT]).catch(() => null);
   }
 
   // One page (PAGES): a heading and a line on what it's for, then its settings.
@@ -257,7 +258,7 @@ export default class SidebarOptions extends View {
     this.scanning = true;
     cx.notify();
     cx.spawn(async (cx) => {
-      const r = await exec("sh", ["-c", MORE]).catch(() => null);
+      const r = await shExec(["-c", MORE]).catch(() => null);
       this.more = (r?.stdout ?? "").split("\n").filter((d) => d && d !== home() && !d.startsWith("/tmp/"));
       this.scanning = false;
       cx.notify();

@@ -5,6 +5,7 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { exec, pickFolder } from "herdr";
+import { shExec } from "./sh.js";
 
 // The folders in $1 (~ for home), one name per line; fails when it isn't one.
 const LIST = 'case "$1" in "~") d=$HOME ;; "~/"*) d="$HOME/${1#"~/"}" ;; *) d=$1 ;; esac; [ -d "$d" ] || exit 1; for s in "$d"/*/; do [ -d "$s" ] && basename "$s"; done';
@@ -30,7 +31,7 @@ export class FolderPick {
   list(cx) {
     const at = this.path();
     cx.spawn(async (cx) => {
-      const r = await exec("sh", ["-c", LIST, "sh", at], this.machine ? { on: this.machine } : {}).catch(() => null);
+      const r = await shExec(["-c", LIST, "sh", at], this.machine).catch(() => null);
       if (this.path() !== at) return; // typed on meanwhile
       this.subs = r?.code === 0 ? r.stdout.split("\n").filter(Boolean) : [];
       cx.notify();

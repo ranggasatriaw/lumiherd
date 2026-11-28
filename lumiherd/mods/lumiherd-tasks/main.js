@@ -12,6 +12,7 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { theme, exec, home, focused, agents, readTextFile, shared } from "herdr";
+import { shExec } from "./sh.js";
 
 const STORE = `cat "$HOME"/.claude/plugins/store/plan-progress_*.json 2>/dev/null | head -c 4000000`;
 const STATE = { running: "Working", needs_input: "Needs you", error: "Error", done: "Done" };
@@ -37,7 +38,7 @@ export default class Tasks extends View {
         let session = null;
         try { session = (JSON.parse(info)?.transcript ?? "").split("/").pop().replace(/\.jsonl$/, "") || null; } catch {}
         if (!session) return this.show(cx, [], "Tasks show for Claude Code agents");
-        const r = await exec("sh", ["-c", STORE]).catch(() => null);
+        const r = await shExec(["-c", STORE]).catch(() => null);
         let store = null;
         try { store = JSON.parse(r?.stdout || "null"); } catch {}
         if (!store) return this.show(cx, [], "Needs the plan-progress plugin in Claude Code");

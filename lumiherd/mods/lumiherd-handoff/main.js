@@ -6,7 +6,8 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
-import { props, closeOverlay, theme, exec, hc, home, shared } from "herdr";
+import { props, closeOverlay, theme, hc, home, shared } from "herdr";
+import { shAt } from "./sh.js";
 
 // lumiherd's handoff.sh, as lumiherd (syncHelpers) installs it on each computer:
 // outside the mod folder because agents run it by this path (from the hand-off
@@ -26,9 +27,9 @@ export default class Handoff extends View {
     cx.spawn(async (cx) => {
       // The spaces on the agent's own computer ("laptop/t3" is another one's).
       const m = props()?.terminal?.includes("/") ? props().terminal.split("/")[0] : null;
-      // sh as lumiherd found it there (Git's on Windows).
+      // Git's sh on Windows, here too: --list only reads.
       const sh = shared("lumiherd.sh")?.[m ?? ""] ?? "sh";
-      const r = await exec(sh, ["-c", '[ -f "$HOME/$1" ] || exit 3; sh "$HOME/$1" --list', "sh", SCRIPT], m ? { on: m } : {}).catch(() => null);
+      const r = await shAt(sh, ["-c", '[ -f "$HOME/$1" ] || exit 3; sh "$HOME/$1" --list', "sh", SCRIPT], m ? { on: m } : {}).catch(() => null);
       this.missing = r?.code === 3; // no helper there: nothing to hand off with
       this.spaces = (r?.stdout ?? "").split("\n").filter(Boolean);
       cx.notify();
