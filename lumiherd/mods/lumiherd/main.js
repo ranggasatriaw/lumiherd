@@ -25,6 +25,25 @@ const python = (args, m) => {
     .then((p) => exec(p, args, on));
 };
 
+// A computer's home, the Projects folder its rules name (or ""), and its project
+// folders (MARKED), in `projects` as set or else the named one or home. Without sh
+// (Windows), projects.py next to this file does the same. Null when neither runs.
+let PROJECTS_PY = null;
+async function scanOn(m, projects) {
+  const on = m ? { on: m } : {};
+  const home = await exec("sh", ["-c", 'printf %s "$HOME"'], on).catch(() => null);
+  if (home?.code === 0) {
+    const named = projects ? "" : (await exec("sh", ["-c", PROJECTS_FROM_RULES], on).catch(() => null))?.stdout.trim() ?? "";
+    const r = await exec("sh", ["-c", MARKED, "sh", projects || named || "~"], on);
+    if (r?.code !== 0) return null;
+    return { home: home.stdout, named, dirs: r.stdout.split("\n").filter(Boolean) };
+  }
+  PROJECTS_PY ??= await readTextFile(`${appHome()}/mods/lumiherd/projects.py`).catch(() => null);
+  if (!PROJECTS_PY) return null;
+  const r = await python(["-c", PROJECTS_PY, projects ?? ""], m).catch(() => null);
+  try { return r?.code === 0 ? JSON.parse(r.stdout) : null; } catch { return null; }
+}
+
 // Closing asks first (lumiherd-close says how many terminals and agents end)
 // when a whole space would go or an agent that's still working would end, else
 // happens at once, as Herdr does.
@@ -59,7 +78,7 @@ const TREE = 22;
 let HOME = null;
 const homeDir = () => (HOME ??= home());
 // A path as it's shown on hover: home as ~.
-const tilde = (path) => { const p = (path ?? "").replace(/\/+$/, ""); return p === homeDir() ? "~" : p.startsWith(homeDir() + "/") ? `~${p.slice(homeDir().length)}` : p; };
+const tilde = (path) => { const p = trim(path ?? ""); return p === homeDir() ? "~" : inside(p, homeDir()) ? `~${p.slice(homeDir().length)}` : p; };
 const narrow = () => (find(layout(), "sidebar")?.size?.px ?? Infinity) < 160;
 
 // Where a space is: the folder it was made for, not where its terminals went
@@ -70,10 +89,12 @@ function place(s, _ps) {
 }
 // A space's name in the list: its own when someone named it, else its folder's
 // (Herdr would call it after wherever its first terminal went).
-const title = (s) => (s.named || s.machine ? s.name : !s.folder || s.folder.replace(/\/+$/, "") === homeDir() ? "~" : base(s.folder));
+const title = (s) => (s.named || s.machine ? s.name : !s.folder || trim(s.folder) === homeDir() ? "~" : base(s.folder));
 const rowHeight = ({ tree }) => (tree ? 28 : 30);
 const where = (s, ps) => JSON.stringify([s.machine ?? null, place(s, ps)]);
-const base = (path) => path.replace(/\/+$/, "").split("/").pop();
+// Paths on Windows (another computer's too) have backslashes.
+const trim = (path) => path.replace(/[\\/]+$/, "");
+const base = (path) => trim(path).split(/[\\/]/).pop();
 // Changes made outside Herdr (an editor's save, a commit in another app): looked
 // for this often, in repos the list shows, while the window is in front.
 const FALLBACK = 60000;
@@ -111,7 +132,7 @@ function alias(text, kind) {
 }
 const hide = (text, kind) => (!isPrivate() || text == null || text === "" ? text : kind === "text" ? "\u2022\u2022\u2022\u2022\u2022" : alias(text, kind === "agent" ? "Agen" : "Proyek"));
 // A path: home and the alias of its last folder ("~/…/Proyek KQ").
-const hidePath = (p) => (!isPrivate() || !p ? p : p === "~" ? p : `~/\u2026/${alias(String(p).replace(/\/+$/, "").split("/").pop(), "Proyek")}`);
+const hidePath = (p) => (!isPrivate() || !p ? p : p === "~" ? p : `~/\u2026/${alias(base(String(p)), "Proyek")}`);
 
 // A pull request's checks in one word: "fail" if any failed, else "pending" while any
 // runs, else "pass"; null without checks. Check runs have a conclusion, statuses a state.
@@ -139,7 +160,7 @@ const FOLD = 16;
 const ADD = 22;
 // Shift, Cmd/Meta or Ctrl + click picks rows; right-click a picked one to close or unpin them.
 const multi = (e) => Boolean(e?.modifiers && (e.modifiers.shift || e.modifiers.platform || e.modifiers.control));
-const inside = (cwd, dir) => cwd === dir || cwd?.startsWith(dir + "/");
+const inside = (cwd, dir) => cwd === dir || cwd?.startsWith(dir + "/") || cwd?.startsWith(dir + "\\");
 
 const isPi = (a) => a.app === "pi" || a.program?.key === "pi";
 // Possibly Antigravity: agy-info.py, which only answers for terminals agy runs in,
@@ -1937,15 +1958,14 @@ export default class Spaces extends View {
       try {
         const set = shared("sidebar.options")?.locations ?? {};
         const full = (d) => d.replace(/^~(?=\/|$)/, homeDir());
-        const named = set.projects ? null : (await exec("sh", ["-c", PROJECTS_FROM_RULES]).catch(() => null))?.stdout.trim();
-        const where = { chats: set.chats ? full(set.chats) : homeDir(), projects: set.projects ? full(set.projects) : named ? full(named) : homeDir() };
+        const r = await scanOn(null, set.projects ? full(set.projects) : null);
+        if (!r) return;
+        const where = { chats: set.chats ? full(set.chats) : homeDir(), projects: set.projects ? full(set.projects) : r.named ? full(r.named) : homeDir() };
         const code = [where.projects];
         // Shared for handoff.sh, the + menu's scan and lumiherd-options.
         if (JSON.stringify(where) !== JSON.stringify(shared("lumiherd.locations"))) setShared("lumiherd.locations", where);
         if (JSON.stringify(code) !== JSON.stringify(shared("projects.codeFolders"))) setShared("projects.codeFolders", code);
-        const r = await exec("sh", ["-c", MARKED, "sh", ...code]);
-        if (r.code !== 0) return;
-        const all = r.stdout.split("\n").filter(Boolean).map((d) => d.replace(/\/+$/, ""));
+        const all = r.dirs.map(trim);
         const dirs = all.filter((d) => d !== homeDir() && !inside(d, "/tmp") && !SKIP.has(base(d)) && !all.some((o) => o !== d && inside(o, d)));
         if (JSON.stringify(dirs) !== JSON.stringify(this.auto)) {
           this.auto = dirs;
@@ -1973,11 +1993,11 @@ export default class Spaces extends View {
       for (const m of up) {
         try {
           const own = set[m] ?? {};
-          const named = own.projects ? null : (await exec("sh", ["-c", PROJECTS_FROM_RULES], { on: m }).catch(() => null))?.stdout.trim();
-          const where = { chats: own.chats ?? "~", projects: own.projects ?? (named || "~") };
-          const r = await exec("sh", ["-c", MARKED, "sh", where.projects], { on: m });
-          const home = (await exec("sh", ["-c", "printf %s \"$HOME\""], { on: m }))?.stdout ?? "";
-          const all = (r?.stdout ?? "").split("\n").filter(Boolean).map((d) => d.replace(/\/+$/, ""));
+          const r = await scanOn(m, own.projects ?? null);
+          if (!r) continue;
+          const where = { chats: own.chats ?? "~", projects: own.projects ?? (r.named || "~") };
+          const home = r.home;
+          const all = r.dirs.map(trim);
           const dirs = all.filter((d) => d !== home && !inside(d, "/tmp") && !SKIP.has(base(d)) && !all.some((o) => o !== d && inside(o, d)));
           found[m] = { ...where, home, dirs, asked: own };
           this.autoPin(dirs, m);
@@ -2184,7 +2204,7 @@ export default class Spaces extends View {
   // it after the folder), and its renamed projects go by their names.
   title(w) {
     if (!w.machine || w.named) return title(w);
-    const r = this.remote[w.machine], f = (w.folder ?? "").replace(/\/+$/, "");
+    const r = this.remote[w.machine], f = trim(w.folder ?? "");
     if (r?.home && (f === r.home || !f)) return "~";
     return shared("projects.on")?.[w.machine]?.names?.[f] || w.name;
   }
@@ -2419,8 +2439,8 @@ export default class Spaces extends View {
   // A space's colour as its row draws it (null: home, or not a listed project).
   // A folder as you'd type it: ~ for home, here or on another computer (its home kept from its scan).
   where(folder, m = null) {
-    const d = (folder ?? "").replace(/\/+$/, ""), h = m ? this.remote[m]?.home : homeDir();
-    return h && (d === h || d.startsWith(h + "/")) ? `~${d.slice(h.length)}` : d || "~";
+    const d = trim(folder ?? ""), h = m ? this.remote[m]?.home : homeDir();
+    return h && inside(d, h) ? `~${d.slice(h.length)}` : d || "~";
   }
 
   spaceColor(w, t) {
