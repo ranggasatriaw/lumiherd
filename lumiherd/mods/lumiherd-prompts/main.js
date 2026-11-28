@@ -7,14 +7,18 @@
 // only gets a message's tokens once it's finished), the files it changed and
 // the commands it ran, and the start of its reply. Click one, or ↑/↓ then Enter,
 // to read the whole prompt and the reply (Markdown) here; Esc closes it.
+// The header picks Prompts or Files: every file the agent changed (its file-editing
+// calls, once each, newest first; files.js), with its folder and how long
+// ago; a click (or Enter) opens the prompt that last changed it.
 // Claude Code agents only: claude-info.py (Lumiherd's sidebar runs it; on its own, this
 // mod's copy) says which conversation runs in each terminal, from Claude Code's own
 // session files (~/.cache/lumiherd/agents/<terminal>.json); prompts.py reads it.
 // Followed: the agent you're in, else the last one you were in.
 
 import { View, div, svg } from "gpui-kit";
-import { v_flex, h_flex, TextView } from "gpui-base";
+import { v_flex, h_flex, TextView, ScrollHandle } from "gpui-base";
 import { theme, exec, home, appHome, focused, agents, panes, readTextFile, hc, shared } from "herdr";
+import { filesOf, ago } from "./files.js";
 
 // Python 3 runs as "python3", else "python" (as on Windows): found once.
 let PY = null;
@@ -81,6 +85,9 @@ export default class Prompts extends View {
     this.prompts = [];
     this.open = null; // the index read in full
     this.at = 0; // the keyboard's row (newest first)
+    this.view = "prompts"; // or "files"
+    this.fileAt = 0; // the keyboard's row in Files
+    this.scroll = ScrollHandle.new(); // the cards', to bring a file's prompt into view
     this.note = "Open an agent to see its prompts";
     this.follow(cx);
     cx.timer.every(2000, (cx) => { this.follow(cx); if (agents().find((x) => x.address === this.agent)?.status === "working") this.readLive(cx); else this.live = null; });
@@ -90,7 +97,7 @@ export default class Prompts extends View {
   follow(cx) {
     const f = focused();
     const here = f?.agent ?? (f?.terminal && agents().some((a) => a.address === f.terminal) ? f.terminal : null);
-    if (here && here !== this.agent) { this.agent = here; this.transcript = null; this.size = null; this.open = null; this.at = 0; this.shown = SHOWN; this.prompts = []; cx.notify(); }
+    if (here && here !== this.agent) { this.agent = here; this.transcript = null; this.size = null; this.open = null; this.at = 0; this.view = "prompts"; this.fileAt = 0; this.shown = SHOWN; this.prompts = []; cx.notify(); }
     if (!this.agent || this.busy) return;
     this.busy = true;
     cx.spawn(async (cx) => {
@@ -194,9 +201,39 @@ export default class Prompts extends View {
               .child(div().child("Changed"))
               .children(p.edits.map((x) => div().truncate().text_color(t.muted).child(x.replace(home(), "~")))))))));
     };
+    const files = filesOf(all, home());
+    // A file: its prompt's card, drawn and open.
+    const openFile = (f, cx) => {
+      this.view = "prompts";
+      this.shown = Math.max(this.shown ?? SHOWN, f.prompt + 1);
+      this.at = this.open = f.prompt;
+      this.scroll.scroll_to_item(f.prompt);
+      this.handle.focus();
+      cx.notify();
+    };
+    const fileRow = (f, i) => h_flex().id(`file-${i}`).h(30).px(10).gap(8).items_center().rounded(7).cursor_pointer()
+      .when(this.fileAt === i, (el) => el.bg(t.raised)).hover((x) => x.bg(t.hover))
+      .on_click((_e, cx) => { this.fileAt = i; openFile(f, cx); })
+      .child(div().flex_none().max_w(220).truncate().text_size(12.5).text_color(t.foreground).child(f.name))
+      .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(f.folder))
+      .child(div().flex_none().text_size(11).text_color(t.dim).child(ago(f.at)));
+    const pick = (id, label, n) => h_flex().id(`timeline-view-${id}`).h(18).px(6).flex_none().items_center().rounded(4).cursor_pointer()
+      .text_color(this.view === id ? t.foreground : t.dim).when(this.view === id, (el) => el.bg(t.raised))
+      .hover((s) => s.text_color(t.foreground))
+      .on_click((_e, cx) => { this.view = id; this.handle.focus(); cx.notify(); })
+      .child(n ? `${label} ${n}` : label);
     return v_flex().id("lumiherd-prompts").track_focus(this.handle).size_full().min_h(0).rounded(10).overflow_hidden()
       .bg(t.background).border_1().border_color(t.border).text_color(t.foreground).text_size(13)
       .on_key_down((e, cx) => {
+        if (this.view === "files") {
+          if (!files.length) return;
+          if (e.key === "down") this.fileAt = Math.min(files.length - 1, this.fileAt + 1);
+          else if (e.key === "up") this.fileAt = Math.max(0, this.fileAt - 1);
+          else if (e.key === "enter" && files[this.fileAt]) return openFile(files[this.fileAt], cx);
+          else return;
+          cx.notify();
+          return;
+        }
         if (!list.length) return;
         if (e.key === "down") this.at = Math.min(list.length - 1, this.at + 1);
         else if (e.key === "up") this.at = Math.max(0, this.at - 1);
@@ -207,9 +244,8 @@ export default class Prompts extends View {
         cx.notify();
       })
       .child(h_flex().h(42).flex_none().px(14).gap(8).items_center().border_b(1).border_color(t.border)
-        .child(div().flex_none().font_semibold().child("Timeline"))
-        .when(all.length > 0, (el) => el.child(div().flex_none().px(5).py(1).rounded(4).border_1().border_color(t.border).text_size(10).text_color(t.muted)
-          .child(`${all.length} prompt${all.length > 1 ? "s" : ""}`)))
+        .child(h_flex().flex_none().gap(1).p(1).rounded(5).border_1().border_color(t.border).text_size(11)
+          .child(pick("prompts", "Prompts", all.length)).child(pick("files", "Files", files.length)))
         .child(div().flex_1().min_w(0).truncate().text_right().text_size(12).text_color(t.dim).child(this.name()))
         // As the CLI words them: ↓ what it wrote this session, and the context it holds now.
         .when(list.length > 0, (el) => el.child(div().flex_none().text_size(12).text_color(t.dim)
@@ -217,7 +253,10 @@ export default class Prompts extends View {
             this.context ? `context ${count(this.context)}` : ""].filter(Boolean).join(" · ")))))
       .when(Boolean(this.note), (el) => el.child(div().px(14).py(10).text_size(12).text_color(t.dim).child(this.note)))
       .when(Boolean(shared("lumiherd.private")), (el) => el.child(div().px(14).py(10).text_size(12).text_color(t.dim).child("Hidden: privacy is on (the eye in the sidebar)")))
-      .when(!shared("lumiherd.private"), (el) => el.child(v_flex().id("prompts-scroll").flex_1().min_h(0).overflow_y_scrollbar().pl(8).pr(8).pt(6).pb(8)
+      .when(!shared("lumiherd.private") && this.view === "files", (el) => el.child(v_flex().id("files-scroll").flex_1().min_h(0).overflow_y_scrollbar().px(8).pt(6).pb(8)
+        .when(!files.length && !this.note, (el) => el.child(div().px(6).py(4).text_size(12).text_color(t.dim).child("No files changed yet")))
+        .children(files.map(fileRow))))
+      .when(!shared("lumiherd.private") && this.view === "prompts", (el) => el.child(v_flex().id("prompts-scroll").track_scroll(this.scroll).flex_1().min_h(0).overflow_y_scrollbar().pl(8).pr(8).pt(6).pb(8)
         .children(list.map(item))
         .when(all.length > list.length, (el) => el.child(div().id("prompts-older").mx(22).my(6).px(10).py(6).rounded(6).cursor_pointer()
           .border_1().border_color(t.border).text_size(12).text_color(t.muted).hover((x) => x.bg(t.hover))

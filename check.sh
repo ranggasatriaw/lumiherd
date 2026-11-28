@@ -29,6 +29,9 @@ for f in $(find lumiherd/mods -name '*.js'); do
   node --check --input-type=module < "$f" >/dev/null 2>&1 || bad "JavaScript doesn't parse: $f ($(node --check --input-type=module < "$f" 2>&1 | grep -m1 -E 'Error'))"
 done
 
+# Tests of mods' pure parts (node:test).
+node --test 'tests/*.test.mjs' >/dev/null 2>&1 || bad "node tests failed (node --test 'tests/*.test.mjs')"
+
 # Shell scripts parse.
 for f in $(find . -name '*.sh' -not -path './.git/*'); do
   sh -n "$f" 2>/dev/null || bad "shell script doesn't parse: $f"
