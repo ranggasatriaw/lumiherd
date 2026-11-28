@@ -17,6 +17,7 @@ import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex, InputState, Input } from "gpui-base";
 import { theme, spaces, panes, knownAgents, run, openOverlay, closeOverlay, props, window, keys, exec, home, appHome, shared, setShared, notify, readTextFile, pickFolder, layout } from "herdr";
 import { shExec } from "./sh.js";
+import { native } from "./paths.js";
 
 // Past sessions of each agent, newest first, as lines of id, when (seconds),
 // title, the folder it ran in, and the model and provider it last used. With a folder ($1): those started there;
@@ -129,23 +130,28 @@ const FOLDERS = `{
   done
 } | while read -r d; do [ -d "$d" ] && echo "$d"; done | sort -u`;
 
+// Another computer runs Windows when lumiherd found Git's sh.exe there.
+const isWin = (m) => Boolean(m) && /\.exe$/i.test(shared("lumiherd.sh")?.[m] ?? "");
+
 // Git and agent folders not in the sidebar: never listed, or unpinned by hand.
 // Pinned or auto-listed ones are already there, and so is any with a space open.
 // On another computer (machine) it runs there, against that computer's lists
 // (shared "projects.on" and "projects.autoOn", kept by lumiherd).
 async function scanFolders(machine = null) {
-  const on = machine ? { on: machine } : {};
+  const win = isWin(machine);
   const r = await shExec(["-c", FOLDERS], machine).catch(() => null);
-  const h = machine ? ((await shExec(["-c", 'printf %s "$HOME"'], machine).catch(() => null))?.stdout ?? "") : home();
+  const h = machine ? native((await shExec(["-c", 'printf %s "$HOME"'], machine).catch(() => null))?.stdout ?? "", win) : home();
   const mine = machine ? shared("projects.on")?.[machine] ?? {} : null;
   // The Projects folder itself (lumiherd's, shared) only holds spaces.
-  const code = new Set(machine ? [(shared("lumiherd.remoteLocations")?.[machine]?.projects ?? "~/Code").replace(/^~(?=\/|$)/, h)] : shared("projects.codeFolders") ?? [`${home()}/Code`]);
+  const there = (shared("lumiherd.remoteLocations")?.[machine]?.projects ?? "~/Code").replace(/^~(?=\/|$)/, h);
+  const code = new Set(machine ? [win ? there.replace(/\//g, "\\") : there] : shared("projects.codeFolders") ?? [`${home()}/Code`]);
   const listed = new Set([
     ...(machine ? [...(shared("projects.autoOn")?.[machine] ?? []).filter(d => !(mine.hidden ?? []).includes(d)), ...(mine.pinned ?? [])] : shared("projects.listed") ?? []),
     ...spaces().filter(s => (s.machine ?? null) === machine).map(s => norm(s.folder))]);
   const off = new Set(machine ? [...(mine.hidden ?? []), ...(mine.unpinned ?? [])] : [...(shared("projects.hidden") ?? []), ...(shared("projects.unpinned") ?? [])]);
-  return (r?.stdout ?? "").split("\n").filter(Boolean)
-    .filter((d) => d !== h && !code.has(d) && !d.startsWith("/tmp/") && !listed.has(d))
+  // On Windows, AppData is what hidden folders are elsewhere (Claude Desktop's scratch folders).
+  return (r?.stdout ?? "").split("\n").filter(Boolean).map((d) => native(d, win))
+    .filter((d) => d !== h && !code.has(d) && !d.startsWith("/tmp/") && !listed.has(d) && !(win && d.startsWith(`${h}\\AppData\\`)))
     .map((d) => ({ dir: d, unpinned: off.has(d) }));
 }
 
@@ -247,7 +253,7 @@ export default class NewMenu extends View {
           // continued elsewhere gets the same prefix.
           const plain = (title ?? "").replace(/^\[cleared\] /i, "").replace(/ \(cleared\)$/, "") || "Untitled session";
           const was = cleared === "cleared" || plain !== (title || "Untitled session");
-          return { id, when: +when, title: was ? `[Cleared] ${plain}` : plain, cwd: (cwd || this.folder).replace(/\/+$/, ""), model, provider };
+          return { id, when: +when, title: was ? `[Cleared] ${plain}` : plain, cwd: native(cwd || this.folder, isWin(this.machine)).replace(/\/+$/, ""), model, provider };
         });
         // Only ones that can be resumed where they ran: not in a folder that's
         // gone (old test runs in /tmp) or an agent's scratch folder.
@@ -405,7 +411,7 @@ export default class NewMenu extends View {
     cx.spawn(async (cx) => {
       const r = await shExec(["-c", SUBFOLDERS, "sh", dir], this.machine).catch(() => null);
       if (this.browse?.dir !== dir) return; // moved on meanwhile
-      const lines = (r?.stdout ?? "").split("\n").filter(Boolean);
+      const lines = (r?.stdout ?? "").split("\n").filter(Boolean).map((d) => native(d, isWin(this.machine)));
       this.browse = { dir, full: r?.code === 0 ? lines[0] : null, subs: r?.code === 0 ? lines.slice(1) : [] };
       cx.notify();
     });
