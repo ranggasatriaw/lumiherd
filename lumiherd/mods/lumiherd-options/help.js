@@ -193,6 +193,7 @@ export function helpTopics(view, t) {
           line(spinner(), "Working"),
           line(small("MP 58"), "Context left (game style; 42% used). Blinks at 20 or less"),
           line(small("2m"), "Since its last reply"),
+          line(div().text_color(t.ansi3).child("no remote"), "Remote Control is off: not reachable from claude.ai or your phone"),
           line(key("Double-click"), "Rename"),
         ]),
       topic("Pull request & task",

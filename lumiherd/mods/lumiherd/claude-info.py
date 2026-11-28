@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # What the sidebar shows under each Claude Code agent, read from Claude Code's
 # own files (no status line involved):
-#   ~/.claude/sessions/<pid>.json   each running Claude Code: its session and folder
+#   ~/.claude/sessions/<pid>.json   each running Claude Code: its session and folder,
+#                                   and whether Remote Control is on (bridgeSessionId)
 #   the process's HC_TERMINAL_ID    which Herdr terminal it runs in
 #   ~/.claude/projects/<folder>/<session>.jsonl   its conversation: model, effort
 #                                   (the last API request), context (the last reply's
@@ -234,6 +235,7 @@ def main():
                 "lastAt": None, "context": None, "cacheUntil": None, "transcript": path}
         except Exception:
             continue
+        found[term]["remote"] = bool(s.get("bridgeSessionId"))
     for term, info in found.items():
         dest = os.path.join(OUT, f"{term}.json")
         text = json.dumps(info, separators=(",", ":"))
