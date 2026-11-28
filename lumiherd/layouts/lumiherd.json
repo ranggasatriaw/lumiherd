@@ -177,6 +177,13 @@
                       "content": {
                         "mod": "lumiherd-servers"
                       }
+                    },
+                    {
+                      "id": "usages",
+                      "type": "block",
+                      "content": {
+                        "mod": "lumiherd-usages"
+                      }
                     }
                   ],
                   "active": "files",

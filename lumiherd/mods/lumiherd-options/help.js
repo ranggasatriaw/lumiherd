@@ -274,6 +274,15 @@ export function helpTopics(view, t) {
           line(small(":5173"), "Open it in the browser"),
           line(key("Stop"), "Click twice to stop a dev server you started (not Docker or databases)"),
         ]),
+      topic("Usages",
+        frame(v_flex().gap(4).px(8).py(6).rounded(8).bg(t.background).border_1().border_color(t.border).text_size(12)
+          .child(h_flex().gap(8).items_center().child(div().flex_1().child("mac-fastr")).child(div().text_color(t.muted).child("$357")))
+          .child(div().h(4).rounded(2).bg(t.accent).w("70%"))), [
+          note("Claude Code's sessions priced at API list prices, by day, project and model: on a plan, where the limits go"),
+          line(key("1d 1w 2w 30d"), "The period"),
+          line(key("This computer"), "Or a machine Herdr is connected to"),
+          note("An estimate, not a bill; claude.ai chats aren't in it. Also saved to ~/.cache/lumiherd/usage/report.json"),
+        ]),
       topic("Small shell",
         frame(h_flex().h(54).px(10).items_center().rounded(8).bg(t.background).border_1().border_color(t.border).text_size(12)
           .child(div().text_color(t.ansi2).child("❯")).child(div().pl(6).text_color(t.muted).child("git status"))), [
