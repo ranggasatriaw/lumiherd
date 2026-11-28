@@ -11,7 +11,7 @@
 import datetime, json, os, re, sys
 
 DAYS = 30
-VERSION = 6  # Bump when prices change or a call's entry does: the cache holds costs.
+VERSION = 7  # Bump when prices change or a call's entry does: the cache holds costs.
 # Dollars per million tokens: input, output, cache read. A cache write is 1.25x input
 # for 5 minutes, 2x for an hour.
 PRICES = {
@@ -81,6 +81,12 @@ def project_name(cwd):
     return ROOTS[cwd]
 
 
+def tokens(u):
+    # [input, output, cache read, cache write]
+    return [u.get("input_tokens") or 0, u.get("output_tokens") or 0,
+            u.get("cache_read_input_tokens") or 0, u.get("cache_creation_input_tokens") or 0]
+
+
 def read_transcript(path):
     # Each API call once, by its id ({"calls": {id: [day, model, cost]}}): it spans several
     # lines. And the folder most of them ran in ("cwd"): the session's project, though
@@ -99,7 +105,7 @@ def read_transcript(path):
                 at = datetime.datetime.fromisoformat(d["timestamp"].replace("Z", "+00:00"))
                 c = cost(name, use)
                 if c is not None:
-                    calls[d.get("requestId") or d.get("uuid")] = [at.astimezone().strftime("%Y-%m-%d"), name, round(c, 7)]
+                    calls[d.get("requestId") or d.get("uuid")] = [at.astimezone().strftime("%Y-%m-%d"), name, round(c, 7), tokens(use)]
                     if d.get("cwd"):
                         where[d["cwd"]] = where.get(d["cwd"], 0) + c
             except (ValueError, KeyError, TypeError, AttributeError):
@@ -172,11 +178,16 @@ def main():
             calls[k] = v + [pr]
     by_day = {d: {} for d in days}
     by_project = {d: {} for d in days}
-    for day, name, c, *rest in calls.values():
+    # A day's cost and tokens by project and model: {day: {(project, model): [cost, in, out, read, write]}}.
+    cells = {d: {} for d in days}
+    for day, name, c, tok, pr in calls.values():
         if day in by_day:
             by_day[day][name] = by_day[day].get(name, 0) + c
-            pr = rest[0] if rest else "?"
             by_project[day][pr] = by_project[day].get(pr, 0) + c
+            cell = cells[day].setdefault((pr, name), [0, 0, 0, 0, 0])
+            cell[0] += c
+            for i, n in enumerate(tok):
+                cell[i + 1] += n
     tmp = f"{store}.{os.getpid()}"
     try:
         with open(tmp, "w") as f:
@@ -188,6 +199,8 @@ def main():
     if report:
         for row in out["days"]:
             row["projects"] = {n: round(c, 6) for n, c in by_project[row["day"]].items()}
+            # [project, model, cost, input, output, cache read, cache write]
+            row["rows"] = [[pr, m, round(v[0], 6), *v[1:]] for (pr, m), v in cells[row["day"]].items()]
         out = {"at": int(now.timestamp()), "estimate": "tokens at list prices, not a bill", **out}
         tmp = os.path.join(usage, f"report.json.{os.getpid()}")
         try:
