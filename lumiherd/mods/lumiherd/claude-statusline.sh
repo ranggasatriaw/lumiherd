@@ -33,7 +33,12 @@ case "${CLAUDE_CODE_USE_BEDROCK:-}" in ""|0|false) ;; *) api=Bedrock ;; esac
 case "${CLAUDE_CODE_USE_VERTEX:-}" in ""|0|false) ;; *) api=Vertex ;; esac
 case "${CLAUDE_CODE_USE_FOUNDRY:-}" in ""|0|false) ;; *) api=Foundry ;; esac
 [ -n "$api" ] || ! printf '%s' "$in" | jq -e '.model.id // "" | test("(^|[.:/])anthropic\\.|arn:aws:bedrock")' >/dev/null 2>&1 || api=Bedrock
-[ -n "$api" ] || ! printf '%s' "$in" | jq -e '.rate_limits == null and (.cost.total_cost_usd // 0) > 0' >/dev/null 2>&1 || api=API
+# An API key: billed by use. Without one, no limits isn't enough: a resumed session
+# has the old cost but no limits until its next reply. So only when Claude isn't
+# signed in to a plan (no oauthAccount in ~/.claude.json) either.
+[ -n "$api" ] || [ -z "${ANTHROPIC_API_KEY:-}${ANTHROPIC_AUTH_TOKEN:-}" ] || api=API
+[ -n "$api" ] || jq -e 'has("oauthAccount")' "$HOME/.claude.json" >/dev/null 2>&1 \
+  || ! printf '%s' "$in" | jq -e '.rate_limits == null and (.cost.total_cost_usd // 0) > 0' >/dev/null 2>&1 || api=API
 [ -z "$api" ] || printf '{"at":%s,"api":"%s"}\n' "$(date +%s)" "$api" > "$u/claude.json"
 # Every session saves here, each with the limits of its own last reply: one that
 # sits idle still has last hour's, and would put them back every time its line is
