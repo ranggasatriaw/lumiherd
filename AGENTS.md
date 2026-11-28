@@ -12,6 +12,20 @@ Windows PC), so every change has to work on both.
 - Name UI in English first, even when the idea came up in Indonesian: the
   panel Rangga first heard of as "Laporan" shipped as "Usages".
 
+## Subagents and second opinions (this project)
+- Whoever orchestrates or plans may dispatch **Sonnet or Haiku** subagents:
+  the smallest that fits (Haiku for lookups and mechanical edits, Sonnet for
+  code and reviews).
+- Higher models (Fable, Opus) are **only** for a second opinion or advice,
+  and **only when Rangga asks** for one in this project.
+- A second opinion or review from another vendor: Codex (`gpt-6.1-sol`) or GLM
+  (`zai/glm-5.4` through omp), at the lowest effort that fits. Launch it through
+  herdr-core so it shows in Herdr, then read its answer:
+  - `hc run --bg --no-notify --name secondop-codex --label task="Codex: <topic>" --cwd <repo> -- codex exec -m gpt-6.1-sol -c model_reasoning_effort=<low|high> -s read-only -o <out.md> "<prompt>"`
+  - `hc run --bg --no-notify --name secondop-glm --label task="GLM: <topic>" --cwd <repo> -- omp -p --model zai/glm-5.4 --thinking <low|high> "<prompt>"`
+  - `hc wait <name>`, read the answer (`out.md`, or `hc read <name>`), then `hc rm <name>`.
+  - Verify what it finds before acting on it.
+
 ## Layout of the repo
 - `lumiherd/mods/<mod>/main.js`: one mod per folder: the sidebar (`lumiherd`),
   `lumiherd-usage` (sidebar usage rows), `lumiherd-usages` (Usages panel),
