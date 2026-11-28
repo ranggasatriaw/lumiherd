@@ -93,6 +93,8 @@ export default class Tabs extends View {
     // Options › Panels & Lumi: Tasks off hides its button, and the panel if it shows it.
     const tasksOn = (shared("sidebar.options") ?? {}).tasks !== false;
     const serversOn = (shared("sidebar.options") ?? {}).servers !== false;
+    const usagesOn = (shared("sidebar.options") ?? {}).usages !== false;
+    if (!usagesOn && panel && !panel.hidden && body?.active === "usages") run("layout.hide", { id: "panel" });
     if (!serversOn && panel && !panel.hidden && body?.active === "servers") run("layout.hide", { id: "panel" });
     if (!tasksOn && panel && !panel.hidden && body?.active === "tasks") run("layout.hide", { id: "panel" });
     const timelineOn = (shared("sidebar.options") ?? {}).timeline !== false;
@@ -135,6 +137,8 @@ export default class Tabs extends View {
       .when(tasksOn, el => el.child(panelButton("tasks", "Tasks", "mods/workspace-chrome/circle-check.svg")))
       // What's listening on this computer (lumiherd-servers).
       .when(serversOn, el => el.child(panelButton("servers", "Servers", "mods/workspace-chrome/server.svg")))
+      // What Claude Code would cost, by project and model (lumiherd-usages).
+      .when(usagesOn, el => el.child(panelButton("usages", "Usages", "mods/lumiherd-usages/chart.svg")))
       .when(w?.buttons, el => el.child(button("minimize", w.platform === "windows" ? svg("mods/lumiherd-tabs/win-min.svg").size(16) : "−", () => run("window.minimize")))
         .child(button("maximize", w.platform === "windows" ? svg(`mods/lumiherd-tabs/${w.maximized ? "win-restore" : "win-max"}.svg`).size(16) : "□", () => run("window.maximize")))
         .child(button("close-window", w.platform === "windows" ? svg("mods/lumiherd-tabs/win-close.svg").size(16) : svg("mods/pane/close.svg").size(13), () => run("window.close"))));
