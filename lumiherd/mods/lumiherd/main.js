@@ -25,6 +25,31 @@ const python = (args, m) => {
     .then((p) => exec(p, args, on));
 };
 
+// sh on a computer (m: a machine's name, or none for this one). Windows has none on
+// the PATH, but Git for Windows brings one (the shell agents use there), found from
+// git --exec-path. Shared as lumiherd.sh for the other mods. Null without either.
+const SH = {};
+async function shOn(m) {
+  const key = m ?? "", on = m ? { on: m } : {};
+  if (key in SH) return SH[key];
+  const runs = async (p) => (await exec(p, ["-c", "exit 0"], on).catch(() => null))?.code === 0;
+  let p = (await runs("sh")) ? "sh" : null;
+  if (!p) {
+    const git = (await exec("git", ["--exec-path"], on).catch(() => null))?.stdout.trim().replace(/\\/g, "/") ?? "";
+    const root = git.replace(/\/[^/]+\/libexec\/git-core$/i, "");
+    if (root && root !== git && (await runs(`${root}/bin/sh.exe`))) p = `${root}/bin/sh.exe`;
+  }
+  if (!p) return null; // looked for again next time (the computer may have been away)
+  SH[key] = p;
+  setShared("lumiherd.sh", { ...(shared("lumiherd.sh") ?? {}), [key]: p });
+  return p;
+}
+const sh = async (args, m) => {
+  const p = await shOn(m);
+  if (!p) throw new Error("no sh");
+  return exec(p, args, m ? { on: m } : {});
+};
+
 // A computer's home, the Projects folder its rules name (or ""), and its project
 // folders (MARKED), in `projects` as set or else the named one or home. Without sh
 // (Windows), projects.py next to this file does the same. Null when neither runs.
@@ -568,7 +593,7 @@ export default class Spaces extends View {
     for (const m of connected) {
       const on = Boolean(wanted[m]?.handoffRule);
       if (!on && this.ruleOn[m]) {
-        await exec("sh", ["-c", 'sh "$HOME/.local/share/lumiherd/handoff.sh" --rule off; rm -rf "$HOME/.local/share/lumiherd"'], { on: m }).catch(() => null);
+        await sh(["-c", 'sh "$HOME/.local/share/lumiherd/handoff.sh" --rule off; rm -rf "$HOME/.local/share/lumiherd"'], m).catch(() => null);
         for (const k of Object.keys(this.synced)) if (k.startsWith(`${m}/`)) delete this.synced[k];
       }
       if (!on) this.ruleOn[m] = false;
@@ -584,18 +609,18 @@ export default class Spaces extends View {
       for (const [name, text] of Object.entries(files)) {
         const key = `${m ?? ""}/${name}`;
         if (text == null || this.synced[key] === text) continue;
-        const r = await exec("sh", ["-c", 'mkdir -p "$HOME/.local/share/lumiherd" && printf %s "$2" > "$HOME/.local/share/lumiherd/$1"', "sh", name, text], m ? { on: m } : {}).catch(() => null);
+        const r = await sh(["-c", 'mkdir -p "$HOME/.local/share/lumiherd" && printf %s "$2" > "$HOME/.local/share/lumiherd/$1"', "sh", name, text], m).catch(() => null);
         if (r?.code === 0) this.synced[key] = text;
       }
       // Folders handed off to (handoff.sh lists them in "pin"): pinned, as the
       // menus' Pin does, so they stay listed.
-      const p = await exec("sh", ["-c", 'f="$HOME/.local/share/lumiherd/pin"; [ -s "$f" ] || exit 0; mv "$f" "$f.$$" && cat "$f.$$" && rm -f "$f.$$"'], m ? { on: m } : {}).catch(() => null);
+      const p = await sh(["-c", 'f="$HOME/.local/share/lumiherd/pin"; [ -s "$f" ] || exit 0; mv "$f" "$f.$$" && cat "$f.$$" && rm -f "$f.$$"'], m).catch(() => null);
       const handed = (p?.stdout ?? "").split("\n").map((d) => d.trim().replace(/\/+$/, "")).filter(Boolean);
       if (handed.length) this.pinHanded(handed, m);
       // Another computer's rule, once its helpers are there (written again when its folders change).
       const sig = m && JSON.stringify(loc);
       if (m && this.ruleOn[m] !== sig) {
-        const r = await exec("sh", ["-c", 'sh "$HOME/.local/share/lumiherd/handoff.sh" --rule on'], { on: m }).catch(() => null);
+        const r = await sh(["-c", 'sh "$HOME/.local/share/lumiherd/handoff.sh" --rule on'], m).catch(() => null);
         if (r?.code === 0) this.ruleOn[m] = sig;
       }
     }

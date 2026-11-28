@@ -12,8 +12,16 @@
 #                        Kimi Code's AGENTS.md)
 # Chats, Projects and this computer's spaces come from Lumiherd, which writes them
 # to locations.json and spaces.json next to this script.
+# Windows (Git's sh): $HOME as C:/Users/… so paths work for Herdr and hc too, and
+# folders handed to Herdr or Lumiherd in Windows' own form (C:\Users\…), as theirs are.
+if command -v cygpath >/dev/null 2>&1; then
+  HOME=$(cygpath -m "$HOME")
+  native() { cygpath -w "$1"; }
+else
+  native() { printf '%s\n' "$1"; }
+fi
 DATA="$HOME/.local/share/lumiherd"
-tilde() { case "$1" in "$HOME") echo "~";; "$HOME"/*) echo "~${1#"$HOME"}";; *) echo "$1";; esac; }
+tilde() { set -- "$(printf '%s' "$1" | tr '\\' /)"; case "$1" in "$HOME") echo "~";; "$HOME"/*) echo "~${1#"$HOME"}";; *) echo "$1";; esac; }
 full() { case "$1" in "~") echo "$HOME" ;; "~/"*) echo "$HOME/${1#"~/"}" ;; *) echo "$1" ;; esac; }
 projects=$(full "$(jq -r '.projects // empty' "$DATA/locations.json" 2>/dev/null)"); [ -n "$projects" ] || projects="$HOME/Code"
 chats=$(full "$(jq -r '.chats // empty' "$DATA/locations.json" 2>/dev/null)"); [ -n "$chats" ] || chats="$HOME"
@@ -44,7 +52,7 @@ EOF
 case "${1:-}" in
   --list)
     { jq -r 'keys[]' "$DATA/spaces.json" 2>/dev/null
-      for d in "$projects"/*/; do [ -d "$d" ] && printf '%s\n' "${d%/}"; done; } | awk '!seen[$0]++' | while read -r d; do tilde "$d"; done
+      for d in "$projects"/*/; do [ -d "$d" ] && native "${d%/}"; done; } | awk '!seen[$0]++' | while read -r d; do tilde "$d"; done
     exit 0 ;;
   --rule)
     # Every agent's file, installed or not yet: the rule is there when it is.
@@ -77,11 +85,12 @@ done
 [ -n "$to" ] || { echo "usage: handoff.sh --to <name or folder> [--brief <text>]" >&2; exit 2; }
 case "$to" in
   "~"|"~/"*) dir=$(full "$to") ;;
-  /*) dir=$to ;;
+  /*|[A-Za-z]:[\\/]*) dir=$to ;;
   *) dir="$projects/$to" ;;
 esac
 dir=${dir%/}
 mkdir -p "$dir" || exit 1
+dir=$(native "$dir")
 
 # The agent handing off: its program, and its model when that's not its usual one
 # (Claude Code's status line file says; Pi's footer does). One hc doesn't name
@@ -102,13 +111,13 @@ case "$agent" in codex) name=Codex ;; pi) name=Pi ;; kimi) name=Kimi ;; *) name=
 
 if command -v herdr-app >/dev/null 2>&1 && herdr-app status >/dev/null 2>&1; then
   # Herdr runs here: its space on that folder, else a new one.
-  space=$(herdr-app ls | jq -r --arg d "$dir" '[.spaces[] | select(.machine == null and ((.folder // "") | rtrimstr("/")) == $d)][0].id // empty')
+  space=$(herdr-app ls | jq -r --arg d "$dir" '[.spaces[] | select(.machine == null and ((.folder // "") | rtrimstr("/") | rtrimstr("\\")) == $d)][0].id // empty')
   argv=$(jq -nc --arg r "$DATA/resume.sh" --arg a "$agent" --arg m "$model" '["sh", $r, $a, "", $m, ""]')
   if [ -n "$space" ]; then
     herdr-app do space.select "$(jq -nc --arg s "$space" '{id: $s}')" >/dev/null
     out=$(herdr-app do tab.new "$(jq -nc --arg s "$space" --arg d "$dir" --arg n "$name" --argjson v "$argv" --arg b "$brief" '{space: $s, folder: $d, name: $n, argv: $v, task: $b}')")
   else
-    out=$(herdr-app do space.new "$(jq -nc --arg d "$dir" --arg n "$name" --argjson v "$argv" --arg b "$brief" '{name: ($d | split("/") | last), folder: $d, tab: $n, argv: $v, task: $b}')")
+    out=$(herdr-app do space.new "$(jq -nc --arg d "$dir" --arg n "$name" --argjson v "$argv" --arg b "$brief" '{name: ([$d | splits("[\\\\/]")] | last), folder: $d, tab: $n, argv: $v, task: $b}')")
   fi
   printf '%s' "$out" | jq -e '.terminal' >/dev/null 2>&1 || { echo "Couldn't hand off to $(tilde "$dir"): $out" >&2; exit 1; }
 else
